@@ -18,7 +18,7 @@
 
 # Setup
   rootdir="/data_/tardiflab/mwc"
-  bidsdir="${rootdir}/bidstest"
+  bidsdir="${rootdir}/bids"
   codedir="${bidsdir}/code"
   rawdir="${bidsdir}/rawdata"
 
