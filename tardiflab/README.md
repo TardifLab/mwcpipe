@@ -1,0 +1,145 @@
+
+# <div align="center">Myelin-Weighted Connectomics</div> #
+Note: This repo is currently under development... we appreciate your patience ;)
+  
+  
+This library of code can be used to   
+* preprocess multi-modal MRI data incl anatomical, diffusion and functional,   
+* compute a range of weighted connectomes in multiple parcellations and   
+* do lots of cool stuff incl explore the structure-function relationship of the human brain!  
+  
+  But first...
+
+### How to cite this work ###  
+  
+Nelson, Mark C., et al. (2023). The Human Brain Connectome Weighted by the Myelin Content and Total Intra-Axonal Cross-Sectional Area of White Matter Tracts. *bioRxiv*  
+https://www.biorxiv.org/content/10.1101/2023.03.01.530710v1   
+  
+  
+Leppert, Ilana R., et al. (2023) Dual-encoded magnetization transfer and diffusion imaging and its application to tract-specific microstructure mapping. *arxiv*  
+https://arxiv.org/abs/2303.03449  
+
+
+For micapipe tools  
+
+Cruces, Raul R., et al. (2022). Micapipe: A pipeline for multimodal neuroimaging and connectome analysis. *NeuroImage*  
+https://doi.org/10.1016/j.neuroimage.2022.119612  
+  
+
+If you donwload the MICs dataset  
+
+Royer, Jessica, et al. (2022). An Open MRI Dataset For Multiscale Neuroscience. *Scientific Data*  
+https://www.nature.com/articles/s41597-022-01682-y  
+  
+ADD MORE REFS E.G., COMMIT  ETC?
+
+  
+
+#### Want to download the data I used? ####
+  
+[MICs dataset can be found here](https://portal.conp.ca/dataset?id=projects/mica-mics)  
+  
+
+#### Need some help using `micapipe`? ####
+[micapipe.readthedocs.io](http://micapipe.readthedocs.io/en/latest/)  
+  
+  
+  Ok let's get started!
+
+## Step 1: data processing ##
+This section can be used to preprocess raw structural, diffusion and functional MRI data to estimate multi-modal whole brain connectivity networks.  
+It is composed primarily of a set of shell wrappers that interface with processing tools from `micapipe`
+  
+Note: The entire `micapipe` library is included, however!   
+  
+**only the functions included in the processing order below were actually used i.e. debugged**.  
+  
+In particular, `01_proc-struc_freesurfer.sh`, `02_proc-rsfmri.sh` & `03_FC.py` were not run, but will be necessary for structure-function investigations.  
+
+
+####  +++  IMPORTANT!!  +++  ####  
+The version of `micapipe` included here was derived from a beta version. The current code on the `micapipe` GitHub has undergone many changes in syntax since.  
+  
+**DO NOT ATTEMPT TO PULL THAT REPO OR USE CODE FROM IT DIRECTLY.**  
+  
+Any desired code from that repo will need to be modified manually to conform with the syntax of this version of `micapipe`.  
+  
+
+### Dependencies ###
+See `scripts_custom/init.sh`  
+
+| *Software* |    *Version*  | *Links* |
+|------------|---------------|--------------|  
+| dcm2niix   | v1.0.20190902 | https://github.com/rordenlab/dcm2niix |
+| Freesurfer | 6.0.0         | https://surfer.nmr.mgh.harvard.edu/ |
+| FSl        | 6.0           | https://fsl.fmrib.ox.ac.uk/fsl/fslwiki |
+| AFNI       | 20.3.03       | https://afni.nimh.nih.gov/download |
+| MRtrix3    | 3.0.1         | https://www.mrtrix.org |
+| ANTs       | 2.3.4         | https://github.com/ANTsX/ANTs |
+| workbench  | 1.4.2         | https://www.humanconnectome.org/software/connectome-workbench |
+| FIX        | 1.06          | https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FIX |
+| R          | 3.6.3         | https://www.r-project.org |
+| python     | 3.7.6         | https://www.python.org/downloads/ |
+  
+
+### Order of operations ###
+Processing scripts should be run in this order.  
+  
+  1. `scripts_custom/01_qbatch_subcall.sh`  
+     - Used to run jobs on the BIC cluster, adapt to your needs  
+  
+  2. `scripts_custom/02_micapipe_call.sh`  
+     - Used to call specific micapipe modules  
+  
+  3. `micapipe/functions/01_proc-struc_volumetric.sh`  
+  
+  4. `scripts_custom/seg4DConvert.sh`  
+     - Workaround for segmentation failure in 01_proc-struc_volumetric.sh  
+  
+  5. `micapipe/functions/02_post-structural.sh`  
+  
+  6. `micapipe/functions/02_proc-dwi.sh`  
+  
+  7. `scripts_custom/03_run_noddi.sh`  
+  
+  8. `micapipe/functions/03_SC.sh`  
+  
+  9. `scripts_custom/04_run_commit0.sh`  
+  
+  10. `scripts_custom/04_run_commit1.sh --> 04_run_commit2.py`  
+  
+  11. `scripts_custom/05_connectomes.sh`  
+  
+
+#### Additional comments ####
+1. `scripts_custom/init.sh` must be modified to reflect your path stucture  
+   - micapipe/functions/init.sh was not used  
+  
+2. `micapipe/functions/utilities.sh` must be modified to reflect your file naming conventions, especially for raw data  
+  
+
+
+## Step 2: analysis ##
+This section can be used to perform simple post-processing operations on connectomes incl. filtering, segmenting, etc and to make some pretty plots.  
+  
+It is entirely based in **Matlab** and was written using the R2016a release.  
+  
+See `MAINSCRIPT.m` for a simple template.
+  
+
+### Dependencies ###
+
+|    *Software*     |      *Version*      | *Links* |
+|-------------------|---------------------|----------------|  
+| BCT               | 2019.03.03          | https://www.nitrc.org/projects/bct |
+| BrainNetViewer    | 1.7                 | https://www.nitrc.org/projects/bnv/ |
+| BrainSpace        | 0.1.1               | https://github.com/MICA-MNI/BrainSpace |
+| ENIGMA            | 2.0.3               | https://github.com/MICA-MNI/ENIGMA
+| gifti-master      | 2.0                 | https://www.nitrc.org/projects/gifti/ |
+| linspecer         | 1.4.0.0             | https://www.mathworks.com/matlabcentral/fileexchange/42673-beautiful-and-distinguishable-line-colors-colormap |
+| suplabel          | 1.5.0.0             | https://www.mathworks.com/matlabcentral/fileexchange/7772-suplabel?s_tid=srchtitle |
+| Violinplot-Matlab | -                   | https://github.com/bastibe/Violinplot-Matlab |
+| xmltree-main      | 2.1                 | https://github.com/gllmflndn/xmltree |
+  
+  
+
