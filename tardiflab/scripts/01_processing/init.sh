@@ -32,29 +32,28 @@
 
 # Append my R library  			*** (NOT TESTED) ***
   myRLibs=${softwareDir}/Rlibs
-#[[ ! -e $myRLibs ]] && mkdir $myRLibs
-if [ -n "$R_LIBS" ]; then
-    export R_LIBS=$myRLibs:$R_LIBS
-else
-    export R_LIBS=$myRLibs
-fi
+  #[[ ! -e $myRLibs ]] && mkdir $myRLibs
+  if [ -n "$R_LIBS" ]; then
+      export R_LIBS=$myRLibs:$R_LIBS
+  else
+      export R_LIBS=$myRLibs
+  fi
 
 # Language utilities
- export LC_ALL=en_US.UTF-8
- export LANG=en_US.UTF-8
+  export LC_ALL=en_US.UTF-8
+  export LANG=en_US.UTF-8
 
 # Additional Paths
- export mwcdir=${root_dir}/mwc
- export RAW_DIR=${mwcdir}                                                               # Where you have raw data stored (NOTE: Must adapt $utilities.sh to match file names)
- export OUT_DIR=${mwcdir}/derivatives                                                   # Where you want derivatives saved
- export procdir=${mwcdir}/mwcproc		      					# Home directory containing micapipe and proc tools
- export MICAPIPE=${procdir}/micapipe 							# Where you put all tools incl micapipe
- export scripts=${procdir}/scripts/01_processing                                        # Location of prcessing tools that interface with micapipe
+  export mwcdir="${root_dir}/mwc"
+  export RAW_DIR="${mwcdir}/bids/rawdata"                                      		# Where you have raw data stored (NOTE: Must adapt $utilities.sh to match file names)
+  export OUT_DIR="${mwcdir}/mwcpipe/tardiflab/output"                                   # Where you want derivatives saved
+  export MICAPIPE="${mwcdir}/mwcpipe" 							# Where you put all tools incl micapipe
+  export scripts="${MICAPIPE}/tardiflab/scripts/01_processing"                          # Location of custom tools that interface with micapipe
 
- export pyvenv_commit=${root_dir}/mnelson/commit/env 					# Location of virtual environment with dependencies for COMMIT & AMICO
+  export pyvenv_commit=${softwareDir}/COMMIT_MTR_env 					# Location of virtual environment with dependencies for COMMIT & AMICO
 
 # To run on cluster
- export SGE_ROOT=/opt/sge
+  export SGE_ROOT=/opt/sge
 
 # To run mrview in X2go
-export LD_PRELOAD=/opt/nvidia/nsight-systems/2021.3.2/host-linux-x64/Mesa/libGL.so && /opt/mrtrix3/bin/mrview $image
+  export LD_PRELOAD=/opt/nvidia/nsight-systems/2021.3.2/host-linux-x64/Mesa/libGL.so && /opt/mrtrix3/bin/mrview $image
