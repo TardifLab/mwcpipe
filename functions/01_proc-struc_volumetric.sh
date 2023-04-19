@@ -63,14 +63,15 @@ aloita=$(date +%s)
 Nsteps=0
 
 # Create script specific temp directory
-tmp=${tmpDir}/${RANDOM}_micapipe_proc_struc-vol_${id}
+#tmp=${tmpDir}/${RANDOM}_micapipe_proc_struc-vol_${id}
+tmp=${tmpDir}/01_proc_struc-vol/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
 trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
 
 # BIDS T1w processing
-N=${#bids_T1ws[@]} # total number of T1w
+N=${#bids_T1ws[@]} 					# total number of T1w
 n=$((N - 1))
 T1str_nat="${idBIDS}_space-nativepro_t1w"
 T1n4="${tmp}/${T1str_nat}_n4.nii.gz"
@@ -168,7 +169,7 @@ fi
 
 # Loop over all requested templates.
 # mmTemplates is a fixed value=(0.8 2) of the MNI152 atlas resolution
-for mm in 2 0.8; do
+for mm in 1; do
   # Only runs if the output doesn't exist
   if [ ! -f "${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_${mm}mm_mode-image_desc-SyN_1Warp.nii.gz" ]; then
       Info "Registration of T1w nativepro to MNI152 ${mm}mm"
