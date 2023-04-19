@@ -25,41 +25,49 @@ bids_variables() {
   export util_parcelations=${MICAPIPE}/parcellations
   export util_lut=${MICAPIPE}/parcellations/lut
   # Directory with the resampled freesurfer surfaces
-  export util_surface=${MICAPIPE}/surfaces # utilities/resample_fsaverage
+  export util_surface=${MICAPIPE}/surfaces 					# utilities/resample_fsaverage
   export util_mics=${MICAPIPE}/MICs60_T1-atlas
 
   export subject=sub-${id}
 
+  export bids_derivs="$(dirname ${BIDS})/derivatives"                      	# Input Derivatives directory
+  export derivs_siemens=${bids_derivs}/siemens
+
   # Handle Single Session
   if [ "$SES" == "SINGLE" ]; then
-      export subject_dir=$out/${subject}     # Output directory
-      export subject_bids=${BIDS}/${subject} # Input BIDS directory
+      export subject_dir=$out/${subject}     					# Output directory
+      export subject_bids=${BIDS}/${subject} 					# Input BIDS directory
+      export subject_siemens=${derivs_siemens}/${subject}
       ses=""
   else
-      export subject_dir=$out/${subject}/${SES}     # Output directory
-      export subject_bids=${BIDS}/${subject}/${SES} # Input BIDS directory
+      export subject_dir=$out/${subject}/${SES}     				# Output directory
+      export subject_bids=${BIDS}/${subject}/${SES} 				# Input BIDS directory
+      export subject_siemens=${derivs_siemens}/${subject}/${SES}
       ses="_${SES}"
   fi
 export idBIDS="${subject}${ses}"
 
   # Structural directories derivatives/
-  export dir_surf=${out/\/micapipe/}/freesurfer    # surfaces
-  	 export dir_freesurfer=${dir_surf}/${idBIDS}  # freesurfer dir
-  export proc_struct=$subject_dir/anat # structural processing directory
-  	 export dir_first=$proc_struct/first      # FSL first
-  	 export dir_volum=$proc_struct/volumetric # Cortical segmentations
-  	 export dir_conte69=${proc_struct}/surfaces/conte69   # conte69
-  export proc_dwi=$subject_dir/dwi               # DWI processing directory
-    export dwi_cnntm=$proc_dwi/connectomes
-    export autoTract_dir=$proc_dwi/auto_tract
+  export dir_surf=${out/\/micapipe/}/freesurfer    				# surfaces
+  export dir_freesurfer=${dir_surf}/${idBIDS}  					# freesurfer dir
+  export proc_struct=$subject_dir/anat 						# structural processing directory
+  export dir_first=$proc_struct/first      					# FSL first
+  export dir_volum=$proc_struct/volumetric 					# Cortical segmentations
+  export dir_conte69=${proc_struct}/surfaces/conte69   				# conte69
+
+  export proc_dwi=$subject_dir/dwi               				# DWI processing directory
+  export dwi_cnntm=$proc_dwi/connectomes
+  export autoTract_dir=$proc_dwi/auto_tract
+
   export proc_func=$subject_dir/func
-    export func_ICA=$proc_func/ICA_MELODIC
-    export func_volum=$proc_func/volumetric
-    export func_surf=$proc_func/surfaces
-  export dir_warp=$subject_dir/xfm              # Transformation matrices
-  export dir_logs=$subject_dir/logs              # directory with log files
-  export dir_QC=$subject_dir/QC                  # directory with QC files
-  export dir_QC_png=$subject_dir/QC/png                  # directory with QC files
+  export func_ICA=$proc_func/ICA_MELODIC
+  export func_volum=$proc_func/volumetric
+  export func_surf=$proc_func/surfaces
+
+  export dir_warp=$subject_dir/xfm              				# Transformation matrices
+  export dir_logs=$subject_dir/logs              				# directory with log files
+  export dir_QC=$subject_dir/QC                  				# directory with QC files
+  export dir_QC_png=$subject_dir/QC/png                 			# directory with QC files
 
   # post structural Files (the resolution might vary depending on the dataset)
   if [ -f "${proc_struct}"/"${idBIDS}"_space-nativepro_t1w.nii.gz ]; then
@@ -78,30 +86,33 @@ export idBIDS="${subject}${ses}"
 
   # Registration from MNI152 to Native pro
   export T1str_nat=${idBIDS}_space-nativepro_t1w
-  export mat_MNI152_SyN=${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_0.8mm_mode-image_desc-SyN_    # transformation strings nativepro to MNI152_0.8mm
-  export T1_MNI152_InvWarp=${mat_MNI152_SyN}1InverseWarp.nii.gz                      # Inversewarp - nativepro to MNI152_0.8mm
+  export mat_MNI152_SyN=${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_    	# transformation strings nativepro to MNI152_1mm
+  export T1_MNI152_InvWarp=${mat_MNI152_SyN}1InverseWarp.nii.gz                      				# Inversewarp - nativepro to MNI152_1mm
   export T1_MNI152_affine=${mat_MNI152_SyN}0GenericAffine.mat
-  export MNI152_mask=${util_MNIvolumes}/MNI152_T1_0.8mm_brain_mask.nii.gz
+  export MNI152_mask=${util_MNIvolumes}/MNI152_T1_1mm_brain_mask.nii.gz
 
   # BIDS Files: resting state
-  bids_mainScan=($(ls "${subject_bids}/func/${subject}${ses}"_task-rest_acq-AP_*bold.nii* 2>/dev/null))       # main func scan
-  bids_mainScanJson=($(ls "${subject_bids}/func/${subject}${ses}"_task-rest_acq-AP_*bold.json 2>/dev/null))   # main func scan json
-  bids_mainPhase=($(ls "${subject_bids}/func/${subject}${ses}"_task-rest_acq-APse_*bold.nii* 2>/dev/null))     # main phase scan
-  bids_reversePhase=($(ls "${subject_bids}/func/${subject}${ses}"_task-rest_acq-PAse_*bold.nii* 2>/dev/null))  # reverse phase scan
+  bids_mainScan=($(ls "${subject_bids}/func/${subject}${ses}"_task-rest_dir-AP_*bold.nii* 2>/dev/null))       	# main func scan
+  bids_mainScanJson=($(ls "${subject_bids}/func/${subject}${ses}"_task-rest_dir-AP_*bold.json 2>/dev/null))   	# main func scan json
+  bids_mainPhase=($(ls "${subject_bids}/fmap/${subject}${ses}"_task-rest_dir-AP_*epi.nii* 2>/dev/null))     	# main phase scan
+  bids_reversePhase=($(ls "${subject_bids}/fmap/${subject}${ses}"_task-rest_dir-PA_*epi.nii* 2>/dev/null))  	# reverse phase scan
 
   # Resting state proc files
-  export topupConfigFile=${FSLDIR}/etc/flirtsch/b02b0_1.cnf                                    # TOPUP config file default
-  export icafixTraining=${MICAPIPE}/functions/MICAMTL_training_15HC_15PX.RData                 # ICA-FIX training file default
+  export topupConfigFile=${FSLDIR}/etc/flirtsch/b02b0_1.cnf                                   	 		# TOPUP config file default
+  export icafixTraining=${MICAPIPE}/functions/MICAMTL_training_15HC_15PX.RData                 			# ICA-FIX training file default
 
   # BIDS Files
-  bids_T1ws=($(ls "$subject_bids"/anat/*T1w.nii* 2>/dev/null))
-  bids_dwis=($(ls "${subject_bids}/dwi/${subject}${ses}"*_dir-AP_*dwi.nii* 2>/dev/null))
-  bids_T1map=$(ls "$subject_bids"/anat/*mp2rage*.nii* 2>/dev/null)
-  bids_qT1map=$(ls "$subject_bids"/anat/*mp2rage*T1map.nii* 2>/dev/null)
-  bids_inv1=$(ls "$subject_bids"/anat/*inv1*T1map.nii* 2>/dev/null)
-  bids_inv2=$(ls "$subject_bids"/anat/*inv2*T1map.nii* 2>/dev/null)
+  bids_T1ws=($(ls "$subject_bids"/anat/*proc-filtered_T1w.nii* 2>/dev/null))
+  bids_dwis=($(ls "${subject_bids}/dwi/${subject}${ses}"*dwi.nii* 2>/dev/null))
+#  bids_T1map=$(ls "$subject_bids"/anat/*MP2RAGE*.nii* 2>/dev/null)
+  bids_T1map=$(ls "$subject_siemens"/anat/*T1map.nii* 2>/dev/null)
+  bids_inv1=$(ls "$subject_bids"/anat/*inv-1*MP2RAGE.nii* 2>/dev/null)
+  bids_inv2=$(ls "$subject_bids"/anat/*inv-2*MP2RAGE.nii* 2>/dev/null)
+  bids_unit1=$(ls "$subject_bids"/anat/*proc-original_UNIT1.nii* 2>/dev/null)
+  bids_unit1ds=$(ls "$subject_siemens"/anat/*proc-denoised_UNIT1.nii* 2>/dev/null)
+
   bids_flair=$(ls "$subject_bids"/anat/*FLAIR*.nii* 2>/dev/null)
-  dwi_reverse=($(ls "${subject_bids}/dwi/${subject}${ses}"_dir-PA_*dwi.nii* 2>/dev/null))
+  dwi_reverse=($(ls "${subject_bids}/fmap/${subject}${ses}"_dir-PA_*epi.nii* 2>/dev/null))
 }
 
 bids_print.variables() {
