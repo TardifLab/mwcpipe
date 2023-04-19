@@ -507,7 +507,7 @@ function json_nativepro_mask() {
     \"BinaryMask\": [
       {
         \"BinaryMask_original\": \"$2\",
-        \"BinaryMask_from\": \"MNI152_0.8mm\",
+        \"BinaryMask_from\": \"MNI152_1mm\",
         \"BinaryMask_antsApplyTransforms\": \"$4\"
       }
     ]
