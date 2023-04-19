@@ -11,7 +11,8 @@
 # 	   sub-10, scan 2
 # 	   sub-20_ses-1, scan 1
 # 	   sub-24_ses-2, scan 2
-# 	b. 
+# 	b. Move T1map & denoised UNI images to derivatives
+# 	c. Copy freesurfer outputs into bids directory
 #
 # 2023 Mark C Nelson, McConnell Brain Imaging Centre, MNI, McGill
 #------------------------------------------------------------------------------------------------------------------------------------
@@ -38,7 +39,7 @@
 # -----------------------------------------------------------------------------------------------------------------------------------
 
 
-## 3. Handle extra T1w images
+## 3a. Handle extra T1w images
 
       # Remove lower quality scan
   	for SUB in {07..10} ; do
@@ -50,3 +51,44 @@
       # Rename T1w files to exclude run-# entity
 	find ${rawdir}/*/* -iname "*_run-*_proc-*_T1w.*" -exec rename -v 's/_run-1_/_/g' '{}' \;
 	find ${rawdir}/*/* -iname "*_run-*_proc-*_T1w.*" -exec rename -v 's/_run-2_/_/g' '{}' \;
+
+
+
+# -----------------------------------------------------------------------------------------------------------------------------------
+
+
+## 3b. Move T1map & denoised UNI images to derivatives folder
+
+# Session-1
+  for SUB in {01..30} ; do
+
+        ID=sub-"${SUB}"
+        sub_dir="${ID}/ses-1"
+	newdir="${bidsdir}/derivatives/siemens/${sub_dir}/anat"
+
+	if [ ! -d ${newdir} ]; then mkdir -p ${newdir} ; fi
+
+	mv ${rawdir}/${sub_dir}/anat/*T1map*  "${newdir}"
+ 	mv ${rawdir}/${sub_dir}/anat/*proc-denoised_UNIT1*  "${newdir}"
+  done
+
+
+# Session-2
+  for SUB in 18 {20..27} 29 ; do
+
+        ID=sub-"${SUB}"
+	sub_dir="${ID}/ses-2"
+        newdir="${bidsdir}/derivatives/siemens/${sub_dir}/anat"
+
+        if [ ! -d ${newdir} ]; then mkdir -p ${newdir} ; fi
+
+        mv ${rawdir}/${sub_dir}/anat/*T1map*  "${newdir}"
+        mv ${rawdir}/${sub_dir}/anat/*proc-denoised_UNIT1*  "${newdir}"
+  done
+
+
+
+# -----------------------------------------------------------------------------------------------------------------------------------
+
+
+## 3c. Copy freesurfer derivatives into bids directory
