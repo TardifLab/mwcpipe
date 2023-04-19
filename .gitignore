@@ -4,3 +4,6 @@ docs/__pycache__/
 docs/pages/.DS_Store
 docs/build/
 functions/__pycache__/
+
+# My additions
+tardiflab/output/
