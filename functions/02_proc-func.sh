@@ -293,7 +293,8 @@ aloita=$(date +%s)
 Nsteps=0
 N=0
 # Create script specific temp directory
-tmp="${tmpDir}/${RANDOM}_micapipe_proc-func_${idBIDS}"
+#tmp="${tmpDir}/${RANDOM}_micapipe_proc-func_${idBIDS}"
+tmp=${tmpDir}/02_proc-func/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails

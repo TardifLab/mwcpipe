@@ -105,7 +105,8 @@ aloita=$(date +%s)
 Nparc=0
 
 # Create script specific temp directory
-tmp="${tmpDir}/${RANDOM}_micapipe_post-dwi_${id}"
+#tmp="${tmpDir}/${RANDOM}_micapipe_post-dwi_${id}"
+tmp=${tmpDir}/03_SC/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
