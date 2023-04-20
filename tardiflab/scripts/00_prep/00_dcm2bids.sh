@@ -22,6 +22,8 @@
   bidsdir="${rootdir}/bids"
   codedir="${bidsdir}/code"
   rawdir="${bidsdir}/rawdata"
+  derivdir="${bidsdir}/derivatives"
+#  outdir="${rootdir}/mwcpipe/tardiflab/output"
 
 # -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -92,3 +94,36 @@
 
 
 ## 3c. Copy freesurfer derivatives into bids directory
+
+freesurfer_dir=${derivdir}/freesurfer
+
+# Session-1
+  for SUB in {01..30} ; do
+
+        ID=sub-"${SUB}"
+        sub_dir="${ID}_ses-1"
+        newdir="${freesurfer_dir}/${sub_dir}"
+	targdir=${rootdir}/hc${SUB}/anat/freeSurfer
+
+        if [ ! -d ${newdir} ]; then mkdir -p ${newdir} ; fi
+
+        cp -r "${targdir}/label"  "${newdir}"
+	cp -r "${targdir}/mri"    "${newdir}"
+	cp -r "${targdir}/surf"   "${newdir}"
+  done
+
+
+# Session-2
+  for SUB in 18 {20..27} 29 ; do
+
+        ID=sub-"${SUB}"
+        sub_dir="${ID}_ses-2"
+	newdir="${freesurfer_dir}/${sub_dir}"
+	targdir=${rootdir}/hc${SUB}r/anat/freeSurfer
+
+        if [ ! -d ${newdir} ]; then mkdir -p ${newdir} ; fi
+
+	cp -r "${targdir}/label"  "${newdir}"
+        cp -r "${targdir}/mri"    "${newdir}"
+        cp -r "${targdir}/surf"   "${newdir}"
+  done
