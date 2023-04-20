@@ -48,7 +48,8 @@ bids_variables() {
 export idBIDS="${subject}${ses}"
 
   # Structural directories derivatives/
-  export dir_surf=${out/\/micapipe/}/freesurfer    				# surfaces
+#  export dir_surf=${out/\/micapipe/}/freesurfer    				# surfaces
+  export dir_surf=${bids_derivs}/freesurfer                                     # surfaces
   export dir_freesurfer=${dir_surf}/${idBIDS}  					# freesurfer dir
   export proc_struct=$subject_dir/anat 						# structural processing directory
   export dir_first=$proc_struct/first      					# FSL first

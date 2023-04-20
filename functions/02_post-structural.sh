@@ -72,7 +72,7 @@ fi
 if [ ! -f "${proc_struct}/${idBIDS}"_space-nativepro_t1w.nii.gz ]; then Error "Subject $id doesn't have T1_nativepro"; exit; fi
 if [ ! -f "$T1fast_seg" ]; then Error "Subject $id doesn't have FAST: run -proc_structural"; exit; fi
 # Check inputs: freesurfer space T1
-if [ ! -f "$T1freesurfr" ]; then Error "Subject $id doesn't have a T1 in freesurfer space: <SUBJECTS_DIR>/${idBIDS}/mri/T1.mgz"; exit; fi
+if [ ! -f "$T1freesurfr" ]; then Error "Subject $id doesn't have a T1 in freesurfer space: ${dir_freesurfer}/mri/T1.mgz"; exit; fi
 
 #------------------------------------------------------------------------------#
 Title "POST-structural processing\n\t\tmicapipe $Version, $PROC "
