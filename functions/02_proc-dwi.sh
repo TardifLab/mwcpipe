@@ -196,6 +196,7 @@ if [[ "$dwi_processed" == "FALSE" ]] && [[ ! -f "$dwi_corr" ]]; then
 
           # Denoise DWI and calculate residuals
           Info "DWI MP-PCA denoising and Gibbs ringing correction"
+	  dwi_dns="${tmp}/MP-PCA_degibbs.mif"
           dwi_dns_tmp="${tmp}/MP-PCA_dwi.mif"
           Do_cmd dwidenoise "$dwi_cat" "$dwi_dns_tmp" -nthreads "$threads"
           mrcalc "$dwi_cat" "$dwi_dns_tmp" -subtract - -nthreads "$threads" | mrmath - mean "$dwi_res" -axis 3
