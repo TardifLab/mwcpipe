@@ -48,7 +48,7 @@ if [[ "$atlas" == "DEFAULT" ]]; then
   Info "Selected parcellations: DEFAULT, N=${N}"
 else
   IFS=',' read -ra atlas_parc <<< "$atlas"
-  for i in "${!atlas_parc[@]}"; do atlas_parc[i]=$(ls lh."${atlas_parc[$i]}"_mics.annot 2>/dev/null); done
+  for i in "${!atlas_parc[@]}"; do atlas_parc[i]=$(ls lh."${atlas_parc[$i]}"_mwc.annot 2>/dev/null); done
   atlas_parc=("${atlas_parc[@]}")
   # Always runs schaefer-400 for default (QC)
   if [[ ! "${atlas_parc[*]}" =~ "schaefer-400" ]]; then atlas_parc+=("schaefer-400"); fi
@@ -154,7 +154,7 @@ Info "fsaverage5 annnot parcellations to T1-nativepro Volume"
 cd "$util_parcelations"
 for parc in "${atlas_parc[@]}"; do
     parc_annot="${parc/lh./}"
-    parc_str=$(echo "${parc_annot}" | awk -F '_mics' '{print $1}')
+    parc_str=$(echo "${parc_annot}" | awk -F '_mwc' '{print $1}')
     if [[ ! -f "${dir_volum}/${T1str_nat}-${parc_str}.nii.gz" ]]; then
         for hemi in lh rh; do
         Info "Running surface $hemi $parc_annot to $subject"
