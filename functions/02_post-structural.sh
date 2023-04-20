@@ -90,7 +90,8 @@ aloita=$(date +%s)
 Nfiles=0
 
 # Create script specific temp directory
-tmp=${tmpDir}/${RANDOM}_micapipe_post-struct_${idBIDS}
+#tmp=${tmpDir}/${RANDOM}_micapipe_post-struct_${idBIDS}
+tmp=${tmpDir}/02_post-struct/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
