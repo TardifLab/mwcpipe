@@ -1,0 +1,29 @@
+# Use this info to make the installtion of the R libraries much faster 
+#
+# 2023 Mark C Nelson, McConnell Brain Imaging Centre, MNI, McGill
+#------------------------------------------------------------------------------------------------------------------------------------
+
+# 1. Ensure that the location of your R library is defined in the R_LIBS environment variable e.g.
+
+# Append my R library          
+  myRLibs=${softwareDir}/Rlibs
+  if [ -n "$R_LIBS" ]; then
+      export R_LIBS=$myRLibs:$R_LIBS
+  else
+      export R_LIBS=$myRLibs
+  fi
+
+# 2. Start R
+  
+  R 
+
+# 3. Install packages by running this command within R
+
+  install.packages(c("plotly", "tidyselect", "parallel", "viridis", "coin", "TH.data", "viridisLite", "purrr", "Rcpp", "tidyr", "splines","jsonlite", "ggplot2", "lattice", "gridExtra","scales", "colorspace", "digest", "randomForest","vctrs", "dplyr", "e1071", "generics","tools", "party", "htmltools", "magrittr", "strucchange", "survival", "lazyeval", "sandwich", "rlang", "tibble", "zoo", "pillar", "crayon", "modeltools", "glue", "pkgconfig", "mvtnorm", "withr", "MASS", "class", "matrixStats", "ellipsis", "ROCR", "multcomp", "libcoin", "kernlab", "lifecycle", "Matrix", "networkD3", "munsell", "data.table", "gtable", "httr", "htmlwidgets", "R6", "codetools", "compiler"))
+
+  
+
+
+
+
+
