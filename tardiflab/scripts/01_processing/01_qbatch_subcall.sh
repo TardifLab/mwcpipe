@@ -21,7 +21,7 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
   FUNC_ID=$1  						#{ volumetric, post_structural, dwi, noddi, SC, FC, noddi, icvf_conn, conn_slice, tck_gen }
 
 # Set options based on desired function
-  if [ $FUNC_ID == volumetric ]        ; then VM=9  ;  Fn=1  ; script="${scriptdir}/02_micapipe_call.sh" ;
+  if [ $FUNC_ID == volumetric ]        ; then VM=6  ;  Fn=1  ; script="${scriptdir}/02_micapipe_call.sh" ; 	# vm=9 works 100% of the time
   elif [ $FUNC_ID == post_structural ] ; then VM=3  ;  Fn=2  ; script="${scriptdir}/02_micapipe_call.sh" ;
   elif [ $FUNC_ID == dwi ]             ; then VM=8  ;  Fn=3  ; script="${scriptdir}/02_micapipe_call.sh" ;
   elif [ $FUNC_ID == noddi ]           ; then VM=10 ;  Fn=4  ; script="${scriptdir}/03_run_noddi.sh" ;
@@ -39,27 +39,28 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 
 # Session-1
   for SUB in {01..30} ; do
+#  for SUB in 02 ; do
 
-	ID=sub-"$SUB"
-	sub_dir="${log_func_dir}/$ID_ses-1"
+	ID=sub-"${SUB}"
+	sub_dir="${log_func_dir}/${ID}_ses-1"
 	if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
 	cd ${sub_dir} 												# cd or logs will output in cwd
 
 	# Call to desired function
-#	qbatch -verbose -l h_vmem=${VM}G -N "$SUB_1_$Fn" ${script} $SUB $FUNC_ID "1" 				# Standard call
-	qbatch -verbose -l h_vmem=${VM}G -N "$SUB_1_$Fn" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"	# option to gauge resource allocation
+#	qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" ${script} $SUB $FUNC_ID "1" 				# Standard call
+	qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"	# option to gauge resource allocation
   done
 
 
 # Session-2
   for SUB in 18 {20..27} 29 ; do
 
-        ID=sub-"$SUB"
-        sub_dir="${log_func_dir}/$ID_ses-2"
+        ID=sub-"${SUB}"
+        sub_dir="${log_func_dir}/${ID}_ses-2"
         if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
         cd ${sub_dir}                                                                                           # cd or logs will output in cwd
 
         # Call to desired function
-#       qbatch -verbose -l h_vmem=${VM}G -N "$SUB_2_$Fn" ${script} $SUB $FUNC_ID "2"                            # Standard call
-        qbatch -verbose -l h_vmem=${VM}G -N "$SUB_2_$Fn" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "2"    # option to gauge resource allocation
+#       qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" ${script} $SUB $FUNC_ID "2"                            # Standard call
+        qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "2"    # option to gauge resource allocation
   done
