@@ -73,16 +73,18 @@ trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
 # BIDS T1w processing
 N=${#bids_T1ws[@]} 					# total number of T1w
 n=$((N - 1))
-T1str_nat="${idBIDS}_space-nativepro_t1w"
+T1str_nat="${idBIDS}_desc-preproc_T1w"
 T1n4="${tmp}/${T1str_nat}_n4.nii.gz"
 T1nativepro="${proc_struct}/${T1str_nat}.nii.gz"
-T1nativepro_brain="${T1nativepro/.nii.gz/_brain.nii.gz}"
+#T1nativepro_brain="${T1nativepro/.nii.gz/_brain.nii.gz}"				# Defined in utilities.sh
 T1nativepro_first="${proc_struct}/first/${T1str_nat}.nii.gz"
-T1nativepro_5tt="${T1nativepro/.nii.gz/_5TT.nii.gz}"
-T1nativepro_mask="${proc_struct}/${idBIDS}_space-nativepro_t1w_brain_mask.nii.gz"
+#T1nativepro_5tt="${T1nativepro/.nii.gz/_5TT.nii.gz}" 					# Defined in utilities.sh
+T1nativepro_5tt=${T15ttgen}
+#T1nativepro_mask="${proc_struct}/${idBIDS}_space-nativepro_t1w_brain_mask.nii.gz"	# Defined in utilities.sh
 
 # Creates the t1w_nativepro for structural processing
-if [ ! -f "${proc_struct}/${T1str_nat}".nii.gz ] || [ ! -f "${proc_struct}/${T1str_nat}"_brain.nii.gz ]; then
+#if [ ! -f "${proc_struct}/${T1str_nat}".nii.gz ] || [ ! -f "${proc_struct}/${T1str_nat}"_brain.nii.gz ]; then
+if [ ! -f "${T1nativepro}" ] || [ ! -f "${T1nativepro_brain}" ]; then
     # Reorient  to LPI with AFNI
     # LPI is the standard 'neuroscience' orientation, where the x-axis is
     # Left-to-Right, the y-axis is Posterior-to-Anterior, and the z-axis is Inferior-to-Superior.
@@ -148,7 +150,8 @@ fi
 # FSL first on the t1w_nativepro
 unset SGE_ROOT
 export FSLPARALLEL=0
-firstout=${T1nativepro_first/.nii.gz/_all_fast_firstseg.nii.gz}
+#firstout=${T1nativepro_first/.nii.gz/_all_fast_firstseg.nii.gz} 			# Defined in utilities.sh
+firstout=${T1fast_seg}
 if [ ! -f "$firstout" ]; then
     Info "FSL first is running, output file: ${T1str_nat}\n\t\t\t ${firstout}"
     Do_cmd run_first_all -i "$T1nativepro_brain" -o "$T1nativepro_first" -b &
@@ -187,7 +190,8 @@ for mm in 1; do
 done
 
 # Update the T1native mask and T1native_brain
-T1nativepro_maskjson="${proc_struct}/${idBIDS}_space-nativepro_t1w_brain_mask.json"
+#T1nativepro_maskjson="${proc_struct}/${idBIDS}_space-nativepro_t1w_brain_mask.json"
+T1nativepro_maskjson="${T1nativepro_mask/.nii.gz/.json}" 					# Defined in utilities.sh
 if [ ! -f "$T1nativepro_maskjson" ]; then
     Do_cmd antsApplyTransforms -d 3 -n GenericLabel -i "$MNI152_mask" -r "$T1nativepro_brain" \
             -t ["$T1_MNI152_affine",1] -t "$T1_MNI152_InvWarp" -o "$T1nativepro_mask" -v
