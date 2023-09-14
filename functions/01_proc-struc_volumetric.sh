@@ -77,6 +77,7 @@ T1str_nat="${idBIDS}_desc-preproc_T1w"
 T1n4="${tmp}/${T1str_nat}_n4.nii.gz"
 T1nativepro="${proc_struct}/${T1str_nat}.nii.gz"
 #T1nativepro_brain="${T1nativepro/.nii.gz/_brain.nii.gz}"				# Defined in utilities.sh
+T1nativepro_brain=${proc_struct}/${idBIDS}_desc-brain_T1w.nii.gz
 T1nativepro_first="${proc_struct}/first/${T1str_nat}.nii.gz"
 #T1nativepro_5tt="${T1nativepro/.nii.gz/_5TT.nii.gz}" 					# Defined in utilities.sh
 T1nativepro_5tt=${T15ttgen}
