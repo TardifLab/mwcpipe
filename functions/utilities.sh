@@ -71,14 +71,14 @@ export idBIDS="${subject}${ses}"
   export dir_QC_png=$subject_dir/QC/png                 			# directory with QC files
 
   # post structural Files (the resolution might vary depending on the dataset)
-  if [ -f "${proc_struct}"/"${idBIDS}"desc-preproc_T1w.nii.gz ]; then
-      export res=$(mrinfo "${proc_struct}"/"${idBIDS}"_desc-preproc_T1w.nii.gz -spacing | awk '{printf "%.1f\n", $2}')
-      export T1nativepro=${proc_struct}/${idBIDS}_desc-preproc_T1w.nii.gz
-      export T1nativepro_brain=${proc_struct}/${idBIDS}_desc-brain_T1w.nii.gz
-      export T1nativepro_mask=${proc_struct}/${idBIDS}_desc-brain_mask.nii.gz
+  if [ -f "${proc_struct}"/"${idBIDS}"_space-nativepro_t1w.nii.gz ]; then
+      export res=$(mrinfo "${proc_struct}"/"${idBIDS}"_space-nativepro_t1w.nii.gz -spacing | awk '{printf "%.1f\n", $2}')
+      export T1nativepro=${proc_struct}/${idBIDS}_space-nativepro_t1w.nii.gz
+      export T1nativepro_brain=${proc_struct}/${idBIDS}_space-nativepro_t1w_brain.nii.gz
+      export T1nativepro_mask=${proc_struct}/${idBIDS}_space-nativepro_t1w_brain_mask.nii.gz
       export T1freesurfr=${dir_freesurfer}/mri/T1.mgz
-      export T15ttgen=${proc_struct}/${idBIDS}_desc-5TT_T1w.nii.gz
-      export T1fast_seg=$proc_struct/first/${idBIDS}_desc-all_fast_firstseg_T1w.nii.gz
+      export T15ttgen=${proc_struct}/${idBIDS}_space-nativepro_t1w_5TT.nii.gz
+      export T1fast_seg=$proc_struct/first/${idBIDS}_space-nativepro_t1w_all_fast_firstseg.nii.gz
   fi
 
   # Native midsurface in gifti format
@@ -86,8 +86,8 @@ export idBIDS="${subject}${ses}"
   export rh_midsurf=${dir_freesurfer}/surf/rh.midthickness.surf.gii
 
   # Registration from MNI152 to Native pro
-  export T1str_nat=${idBIDS}_space-native_T1w
-  export mat_MNI152_SyN=${dir_warp}/${idBIDS}_from-native_brain_to-MNI152_1mm_mode-image_desc-SyN_    	# transformation strings nativepro to MNI152_1mm
+  export T1str_nat=${idBIDS}_space-nativepro_t1w
+  export mat_MNI152_SyN=${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_    	# transformation strings nativepro to MNI152_1mm
   export T1_MNI152_InvWarp=${mat_MNI152_SyN}1InverseWarp.nii.gz                      				# Inversewarp - nativepro to MNI152_1mm
   export T1_MNI152_affine=${mat_MNI152_SyN}0GenericAffine.mat
   export MNI152_mask=${util_MNIvolumes}/MNI152_T1_1mm_brain_mask.nii.gz
