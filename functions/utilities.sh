@@ -30,7 +30,8 @@ bids_variables() {
 
   export subject=sub-${id}
 
-  export bids_derivs="$(dirname ${BIDS})/derivatives"                      	# Input Derivatives directory
+#  export bids_derivs="$(dirname ${BIDS})/derivatives"                      	# Input Derivatives directory
+  export bids_derivs="${BIDS}/derivatives"                           		# Input Derivatives directory
   export derivs_siemens=${bids_derivs}/siemens
 
   # Handle Single Session
