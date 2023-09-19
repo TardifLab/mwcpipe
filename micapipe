@@ -558,7 +558,7 @@ if [ -z ${nocleanup} ]; then nocleanup=FALSE; fi
 if [ "$quiet" = "TRUE" ]; then export quiet=TRUE; fi
 
 # Temporal directory
-if [ -z ${tmpDir} ]; then export tmpDir=${out}/tmp_micapipe; else tmpDir=$(realpath $tmpDir); fi
+if [ -z ${tmpDir} ]; then export tmpDir=${out}/micapipe/tmp_micapipe; else tmpDir=$(realpath $tmpDir); fi
 
 # Freesurfer directory (if already exists)
 if [ -z ${FSdir} ]; then FSdir="FALSE"; else  FSdir=$(realpath $FSdir); fi
