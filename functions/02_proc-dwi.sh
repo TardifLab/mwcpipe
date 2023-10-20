@@ -398,39 +398,65 @@ else
 fi
 
 #------------------------------------------------------------------------------#
-# Registration of corrected DWI-b0 to T1nativepro
+#---------------------------- Tardiflab Mod section ---------------------------#
 
-dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-brain_mask.nii.gz"
-dwi_b0="${proc_dwi}/${idBIDS}_space-dwi_desc-b0.nii.gz" # This should be a NIFTI for compatibility with ANTS
-str_dwi_affine="${dir_warp}/${idBIDS}_space-dwi_from-dwi${dwi_str_}_to-nativepro_mode-image_desc-affine_"
-mat_dwi_affine="${str_dwi_affine}0GenericAffine.mat"
-T1nativepro_in_dwi="${proc_dwi}/${idBIDS}_space-dwi_desc-t1w_nativepro.nii.gz"
+# Compute DWI b0 & brain mask
+  dwi_b0="${proc_dwi}/${idBIDS}_space-dwi_desc-b0.nii.gz" 				# This should be a NIFTI for compatibility with ANTS
+  dwi_b0_brain="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain.nii.gz"
+  dwi_mask_tmp="${tmp}/${idBIDS}_space-dwi_desc-brain_mask_tmp.nii.gz"
+  dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-brain_mask.nii.gz"
 
-if [[ ! -f "$T1nativepro_in_dwi" ]]; then
-      Info "Affine registration from DWI-b0 to T1nativepro"
-      # Corrected DWI-b0s mean for registration
-      dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0" -axis 3 -force
+  if [[ ! -f "$dwi_b0" ]] || [[ ! -f "$dwi_mask" ]]  ; then
 
-      # Register DWI-b0 mean corrected to T1nativepro
-      Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$dwi_b0" -o "$str_dwi_affine" -t a -n "$threads" -p d
-      # Apply inverse transformation T1nativepro to DWI-b0 space
-      Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro" -r "$dwi_b0" -t ["$mat_dwi_affine",1] -o "$T1nativepro_in_dwi" -v -u int
-      if [[ -f "$T1nativepro_in_dwi" ]]; then ((Nsteps++)); fi
+      # Extract b0s and compute mean
+        Info "Computing DWI-b0"
+	dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0" -axis 3 -force
 
-      #------------------------------------------------------------------------------#
-      Info "Creating DWI binary mask of processed volumes"
-      # Create a binary mask of the DWI
-      Do_cmd antsApplyTransforms -d 3 -i "$MNI152_mask" \
-              -r "$dwi_b0" \
-              -n GenericLabel -t ["$mat_dwi_affine",1] -t ["$T1_MNI152_affine",1] -t "$T1_MNI152_InvWarp" \
-              -o "${tmp}"/dwi_mask.nii.gz -v
-      Do_cmd maskfilter "${tmp}"/dwi_mask.nii.gz erode -npass 1 "$dwi_mask"
-      # Do_cmd dwi2mask "$dwi_corr" "$dwi_mask" -nthreads "$threads"
-      if [[ -f "$dwi_mask" ]]; then ((Nsteps++)); fi
-else
-      Info "Subject ${id} has an affine transformation from T1w to DWI-b0 space"; Nsteps=$((Nsteps + 2))
-fi
+      # Compute DWI brain maks with FSL Bet
+	Info "Creating DWI binary mask of processed volumes"
+        bet "$dwi_b0" "$dwi_b0_brain" -m -v # -B -f 0.25
+        maskfilter "$dwi_mask_tmp" erode -npass 1 "$dwi_mask"
 
+	if [[ -f "$dwi_mask" ]]; then ((Nsteps++)); fi
+  else
+        Info "Subject ${id} already has a dwi b0 & brain mask"; Nsteps=$((Nsteps + 2))
+  fi
+
+
+#------------------------------------------------------------------------------#
+## Registration of corrected DWI-b0 to T1nativepro
+#
+#dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-brain_mask.nii.gz"
+#dwi_b0="${proc_dwi}/${idBIDS}_space-dwi_desc-b0.nii.gz" # This should be a NIFTI for compatibility with ANTS
+#str_dwi_affine="${dir_warp}/${idBIDS}_space-dwi_from-dwi${dwi_str_}_to-nativepro_mode-image_desc-affine_"
+#mat_dwi_affine="${str_dwi_affine}0GenericAffine.mat"
+#T1nativepro_in_dwi="${proc_dwi}/${idBIDS}_space-dwi_desc-t1w_nativepro.nii.gz"
+#
+#if [[ ! -f "$mat_dwi_affine" ]] || [[ ! -f "$dwi_mask" ]] ; then
+#      Info "Affine registration from DWI-b0 to T1nativepro"
+#      # Corrected DWI-b0s mean for registration
+#      dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0" -axis 3 -force
+#
+#      # Register DWI-b0 mean corrected to T1nativepro
+#      Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$dwi_b0" -o "$str_dwi_affine" -t a -n "$threads" -p d
+#      # Apply inverse transformation T1nativepro to DWI-b0 space
+#      Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro" -r "$dwi_b0" -t ["$mat_dwi_affine",1] -o "$T1nativepro_in_dwi" -v -u int
+#      if [[ -f "$T1nativepro_in_dwi" ]]; then ((Nsteps++)); fi
+#
+#      #------------------------------------------------------------------------------#
+#      Info "Creating DWI binary mask of processed volumes"
+#      # Create a binary mask of the DWI
+#      Do_cmd antsApplyTransforms -d 3 -i "$MNI152_mask" \
+#              -r "$dwi_b0" \
+#              -n GenericLabel -t ["$mat_dwi_affine",1] -t ["$T1_MNI152_affine",1] -t "$T1_MNI152_InvWarp" \
+#              -o "${tmp}"/dwi_mask.nii.gz -v
+#      Do_cmd maskfilter "${tmp}"/dwi_mask.nii.gz erode -npass 1 "$dwi_mask"
+#      # Do_cmd dwi2mask "$dwi_corr" "$dwi_mask" -nthreads "$threads"
+#      if [[ -f "$dwi_mask" ]]; then ((Nsteps++)); fi
+#else
+#      Info "Subject ${id} has an affine transformation from T1w to DWI-b0 space"; Nsteps=$((Nsteps + 2))
+#fi
+#
 #------------------------------------------------------------------------------#
 # Get some basic metrics.
 dwi_dti="${proc_dwi}/${idBIDS}_space-dwi_model-DTI.mif"
@@ -490,14 +516,13 @@ dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
 dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
 dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
 dwi_5tt="${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz"
-
+fod="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.nii.gz"
+Do_cmd mrconvert -coord 3 0 "$fod_wmN" "$fod"
 
 if [[ ! -f "$dwi_SyN_warp" ]] || [[ ! -f "$dwi_5tt" ]]; then
     dwi_in_T1nativepro="${proc_struct}/${idBIDS}_space-nativepro_desc-dwi.nii.gz" # Only for QC
     T1nativepro_in_dwi_brain="${proc_dwi}/${idBIDS}_space-dwi_desc-t1w_nativepro-brain.nii.gz"
-    fod="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.nii.gz"
     Do_cmd fslmaths "$T1nativepro_in_dwi" -mul "$dwi_mask" "$T1nativepro_in_dwi_brain"
-    Do_cmd mrconvert -coord 3 0 "$fod_wmN" "$fod"
 
     if [[ ${regAffine}  == "FALSE" ]]; then
         Info "Non-linear registration from T1w_dwi-space to DWI"
