@@ -403,8 +403,8 @@ fi
 # Compute DWI b0 & brain mask
   dwi_b0="${proc_dwi}/${idBIDS}_space-dwi_desc-b0.nii.gz" 				# This should be a NIFTI for compatibility with ANTS
   dwi_b0_brain="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain.nii.gz"
-  dwi_mask_tmp="${tmp}/${idBIDS}_space-dwi_desc-brain_mask_tmp.nii.gz"
-  dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-brain_mask.nii.gz"
+  dwi_mask_tmp="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
+  dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain_mask_erode.nii.gz"
 
   if [[ ! -f "$dwi_b0" ]] || [[ ! -f "$dwi_mask" ]]  ; then
 
@@ -414,14 +414,15 @@ fi
 
       # Compute DWI brain maks with FSL Bet
 	Info "Creating DWI binary mask of processed volumes"
-        bet "$dwi_b0" "$dwi_b0_brain" -m -v # -B -f 0.25
-        maskfilter "$dwi_mask_tmp" erode -npass 1 "$dwi_mask"
+        Do_cmd bet "$dwi_b0" "$dwi_b0_brain" -m -v # -B -f 0.25
+        Do_cmd maskfilter "$dwi_mask_tmp" erode -npass 1 "$dwi_mask"
 
 	if [[ -f "$dwi_mask" ]]; then ((Nsteps++)); fi
   else
         Info "Subject ${id} already has a dwi b0 & brain mask"; Nsteps=$((Nsteps + 2))
   fi
 
+  if [[ ! -f "$dwi_b0" ]] || [[ ! -f "$dwi_mask" ]]  ; then Error "Failed to generate dwi_b0 and/or dwi_mask for subject ${id}!!"; exit; fi
 
 #------------------------------------------------------------------------------#
 ## Registration of corrected DWI-b0 to T1nativepro
@@ -561,9 +562,9 @@ fi
 
       # Apply transforms
     	Info "Registering T1w and 5TT to DWI space"
- 	antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_brain_in_dwi_NL" -v --float
-  	antsApplyTransforms -d 3 -i "$T1nativepro" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_in_dwi_NL" -v --float
- 	antsApplyTransforms -d 3 -i "$T15ttgen" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$dwi_5tt" -v --float
+ 	Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_brain_in_dwi_NL" -v --float
+  	Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_in_dwi_NL" -v --float
+ 	Do_cmd antsApplyTransforms -d 3 -i "$T15ttgen" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$dwi_5tt" -v --float
 
     	if [[ -f "$dwi_5tt" ]]; then ((Nsteps++)); fi
   else
