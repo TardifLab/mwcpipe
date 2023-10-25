@@ -496,15 +496,15 @@ if [[ ! -f "$fod_wmN" ]]; then
                 "$rf_gm" "$fod_gm" \
                 "$rf_csf" "$fod_csf" \
                 -mask "$dwi_mask"
-      if [ "${#shells[@]}" -ge 2 ]; then
+#      if [ "${#shells[@]}" -ge 2 ]; then
             Do_cmd mtnormalise "$fod_wm" "$fod_wmN" "$fod_gm" "$fod_gmN" "$fod_csf" "$fod_csfN" -nthreads "$threads" -mask "$dwi_mask"
             Do_cmd mrinfo "$fod_wmN" -json_all "${fod_wmN/mif/json}"
             Do_cmd mrinfo "$fod_gmN" -json_all "${fod_gmN/mif/json}"
             Do_cmd mrinfo "$fod_csfN" -json_all "${fod_csfN/mif/json}"
-      else
-            Do_cmd mtnormalise -nthreads "$threads" -mask "$dwi_mask" "$fod_wm" "$fod_wmN"
-            Do_cmd mrinfo "$fod_wmN" -json_all "${fod_wmN/mif/json}"
-      fi
+#      else
+#            Do_cmd mtnormalise -nthreads "$threads" -mask "$dwi_mask" "$fod_wm" "$fod_wmN"
+#            Do_cmd mrinfo "$fod_wmN" -json_all "${fod_wmN/mif/json}"
+#      fi
       if [[ -f "$fod_wmN" ]]; then ((Nsteps++)); fi
 else
       Info "Subject ${id} has Fiber Orientation Distribution file"; ((Nsteps++))
@@ -521,8 +521,10 @@ fi
   dwi_b0_hires="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_upsampled.nii.gz"
   fod_combo_hires="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-combined-gm-wm-upsampled.nii.gz"
 
+
   if [[ ! -f "$dwi_b0_hires" ]] || [[ ! -f "$fod_combo_hires" ]]; then
-	Info "Computing GM-WM-COMBO-FOD & b0 at T1w resoluton for subject ${id} ";
+
+	Info "Computing GM-WM-COMBO-FOD & b0 at T1w resoluton for subject ${id}"
       # Extract 1st volume from wm & gm FODs & convert to nifti
   	Do_cmd mrconvert -coord 3 0 "$fod_wmN" "$fod_wm"
   	Do_cmd mrconvert -coord 3 0 "$fod_gmN" "$fod_gm"
@@ -533,6 +535,10 @@ fi
       # Upsample b0 & combo fod
   	Do_cmd mrgrid "$dwi_b0_brain" regrid -vox 1.0 "$dwi_b0_hires" 		# WARNING: Resolution harcoded
   	Do_cmd mrgrid "$fod_combo" regrid -vox 1.0 "$fod_combo_hires"
+
+  else
+      Info "Subject ${id} upsampled b0 & combo FOD"; ((Nsteps++))
+  fi
 
 
 #------------ SyN Registration T1w-DWI space
@@ -548,27 +554,32 @@ fi
   T1nativepro_in_dwi_NL="${proc_dwi}/${idBIDS}_space-dwi_desc-t1w_nativepro_SyN.nii.gz"
   T1nativepro_brain_in_dwi_NL="${proc_dwi}/${idBIDS}_space-dwi_desc-t1w_nativepro_brain_SyN.nii.gz"
 
-  if [[ ! -f "$dwi_SyN_warp" ]] || [[ ! -f "$dwi_5tt" ]] || [[ ! -f "$T1nativepro_in_dwi_NL" ]] || [[ ! -f "$T1nativepro_brain_in_dwi_NL" ]]; then
-	Info "Non-linear registration from T1w to DWI space"
+# Compute SyN transform T1w-DWI space
+  if [[ ! -f "$dwi_SyN_warp" ]]; then
+	Info "Computing Non-linear transform from T1w to DWI space"
 	export reg="Affine+SyN"
 
-      # Compute SyN transform T1w-DWI space
+      # Compute transform
       # REGSCRIPT $moving $fixed1 $fixed2 $outprefix $logfile
   	"$regScript" "$T1nativepro_brain" "$dwi_b0_hires" "$fod_combo_hires" "$dwi_SyN_str" "$log_syn"
 
 #	trans_T12dwi="-t ${dwi_SyN_warp} -t ${dwi_SyN_affine}" 					# T1nativepro to DWI
 #       trans_dwi2T1="-t [${dwi_SyN_affine},1] -t ${dwi_SyN_Invwarp}"  				# DWI to T1nativepro
         if [[ -f "$dwi_SyN_warp" ]]; then ((Nsteps++)); fi
-
-      # Apply transforms
-    	Info "Registering T1w and 5TT to DWI space"
- 	Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_brain_in_dwi_NL" -v --float
-  	Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_in_dwi_NL" -v --float
- 	Do_cmd antsApplyTransforms -d 3 -i "$T15ttgen" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$dwi_5tt" -v --float
-
-    	if [[ -f "$dwi_5tt" ]]; then ((Nsteps++)); fi
   else
-    	Info "Subject ${id} has a registration from T1w to DWI space"; Nsteps=$((Nsteps + 2))
+    	Info "Subject ${id} has a transform from T1w to DWI space"; ((Nsteps++))
+  fi
+
+# Apply transforms
+  if  [[ ! -f "$dwi_5tt" ]] || [[ ! -f "$T1nativepro_in_dwi_NL" ]] || [[ ! -f "$T1nativepro_brain_in_dwi_NL" ]]; then
+        Info "Registering T1w and 5TT to DWI space"
+        Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_brain_in_dwi_NL" -v --float
+        Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_in_dwi_NL" -v --float
+        Do_cmd antsApplyTransforms -d 3 -i "$T15ttgen" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$dwi_5tt" -v --float -e 3
+
+        if [[ -f "$dwi_5tt" ]]; then ((Nsteps++)); fi
+  else
+        Info "Subject ${id} has a registration from T1w to DWI space"; ((Nsteps++))
   fi
 
 
