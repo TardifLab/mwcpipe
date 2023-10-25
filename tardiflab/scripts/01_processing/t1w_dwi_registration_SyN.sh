@@ -20,6 +20,12 @@
   dwi_SyN_str="$4"
   log_syn="$5"
 
+  echo "Moving image: $moving"
+  echo "Fixed image 1: $fixed1"
+  echo "Fixed image 2: $fixed2"
+  echo "Output prefix: $dwi_SyN_str"
+  echo "Log location: $log_syn"
+
 
   translation="[$fixed1,$moving,1]"
   w8_fixed1="0.5" 																# weights for cost function
