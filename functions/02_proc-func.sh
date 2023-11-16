@@ -295,7 +295,8 @@ N=0
 # Create script specific temp directory
 #tmp="${tmpDir}/${RANDOM}_micapipe_proc-func_${idBIDS}"
 tmp=${tmpDir}/02_proc-func/${subject}/${SES}
-Do_cmd mkdir -p "$tmp"
+if [[ ! -d "${tmp}" ]]; then Do_cmd mkdir -p "$tmp"; fi
+
 
 # TRAP in case the script fails
 trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
