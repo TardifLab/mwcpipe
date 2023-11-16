@@ -514,24 +514,27 @@ fmri_filtered="${func_ICA}/filtered_func_data.nii.gz"
 func_proc_json="${func_volum}/${idBIDS}${func_lab}_clean.json"
 
 # melodic will run ONLY no FIX option is selected
-if [[ -f "${func_proc_json}" ]]; then export statusMel=$(grep Melodic "${func_proc_json}" | awk -F '"' '{print $4}'); else export statusMel="NO"; fi
-if [[ "$noFIX" -eq 0 ]] && [[ "${statusMel}" != "YES" ]]; then
-    [[ ! -d "${func_ICA}" ]] && Do_cmd mkdir -p "${func_ICA}"
-    Info "Running melodic"
-    Do_cmd cp "$fmri_HP" "$fmri_filtered"
-    Do_cmd melodic --in="${fmri_filtered}" \
-          --tr="${RepetitionTime[0]}" \
-          --nobet \
-          --mask="${fmri_mask}" \
-          --bgthreshold=3 \
-          --mmthresh=0.5 \
-          --report \
-          --Oall \
-          --outdir="${func_ICA}/filtered_func_data.ica" \
-          --Omean="${func_ICA}/mean_func.nii.gz"
-    if [[ -f "${melodic_IC}" ]]; then export statusMel="YES"; else export statusMel="FAILED"; fi
-else
-    Info "Subject ${id} has MELODIC outputs: ${statusMel}"
+#if [[ -f "${func_proc_json}" ]]; then export statusMel=$(grep Melodic "${func_proc_json}" | awk -F '"' '{print $4}'); else export statusMel="NO"; fi
+#if [[ "$noFIX" -eq 0 ]] && [[ "${statusMel}" != "YES" ]]; then
+if [[ ! -f "${func_volum}/${idBIDS}${func_lab}_clean.nii.gz" ]]; then
+   if [[ "$noFIX" -eq 0 ]] && [[ ! -f "${melodic_IC}" ]]; then
+      [[ ! -d "${func_ICA}" ]] && Do_cmd mkdir -p "${func_ICA}"
+      Info "Running melodic"
+      Do_cmd cp "$fmri_HP" "$fmri_filtered"
+      Do_cmd melodic --in="${fmri_filtered}" \
+            --tr="${RepetitionTime[0]}" \
+            --nobet \
+            --mask="${fmri_mask}" \
+            --bgthreshold=3 \
+            --mmthresh=0.5 \
+            --report \
+            --Oall \
+            --outdir="${func_ICA}/filtered_func_data.ica" \
+            --Omean="${func_ICA}/mean_func.nii.gz"
+      if [[ -f "${melodic_IC}" ]]; then export statusMel="YES"; else export statusMel="FAILED"; fi
+   else
+      Info "Subject ${id} has MELODIC outputs"; export statusMel="YES"
+   fi
 fi
 if [[ "$noFIX" -eq 1 ]]; then export statusMel="NO"; fi
 #------------------------------------------------------------------------------#
