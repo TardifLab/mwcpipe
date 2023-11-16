@@ -540,6 +540,7 @@ if [[ "$noFIX" -eq 1 ]]; then export statusMel="NO"; fi
 
 #------------------------------------------------------------------------------#
 #---------------------------- Tardiflab Mod section ---------------------------#
+# T1w <--> Func registration
 
 fmri_in_T1nativepro="${proc_struct}/${idBIDS}_space-nativepro_desc-${tagMRI}_mean.nii.gz"
 T1nativepro_in_func="${func_volum}/${idBIDS}_space-func_desc-t1w.nii.gz"
@@ -552,34 +553,57 @@ SyN_func_Invwarp="${str_func_SyN}1InverseWarp.nii.gz"
 log_syn="${tmp}/${idBIDS}_log_syn.txt"
 
 export reg="Affine+SyN"
-transformsInv="-t ${SyN_func_warp} -t ${SyN_func_affine}" 				# T1nativepro to func
-transform="-t [${SyN_func_affine},1] -t ${SyN_func_Invwarp}"  				# func to T1nativepro
-xfmat="-t ${SyN_func_affine}" 								# T1nativepro to func only lineal for FIX
+transformsInv="-t [${SyN_func_affine},1] -t ${SyN_func_Invwarp}" 			# T1w --> func space
+transform="-t ${SyN_func_warp} -t ${SyN_func_affine}"	  				# func --> T1w space
+xfmat="-t [${SyN_func_affine},1]" 							# T1nativepro to func only lineal for FIX
 
 
 REGSCRIPT="/data_/tardiflab/mwc/mwcpipe/tardiflab/scripts/01_processing/t1w_func_registration_SyN.sh" 		# Custom T1w-FUNC reg method
+moving="$func_brain"
+fixed="$t1bold"
 
 # Registration to native pro
 Nreg=$(ls "$SyN_func_warp" "$fmri_in_T1nativepro" "$T1nativepro_in_func" 2>/dev/null | wc -l )
 if [[ "$Nreg" -lt 3 ]]; then ((N++))
      if [[ ! -f "${t1bold}" ]]; then
         Info "Creating a synthetic BOLD image for registration"
-        # Inverse T1w
+      # Inverse T1w
         Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG.nii.gz" Neg "$T1nativepro"
-        # Dilate the T1-mask
+      # Dilate the T1-mask
         #Do_cmd ImageMath 3 "${tmp}/${id}_t1w_mask_dil-2.nii.gz" MD "$T1nativepro_mask" 2
-        # Masked the inverted T1w
+      # Masked the inverted T1w
         Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG_brain.nii.gz" m "${tmp}/${id}_t1w_nativepro_NEG.nii.gz" "$T1nativepro_mask"
-        # Match histograms values acording to func
+      # Match histograms values acording to func
         Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG-rescaled.nii.gz" HistogramMatch "${tmp}/${id}_t1w_nativepro_NEG_brain.nii.gz" "$func_brain"
-        # Smoothing
+      # Smoothing
         Do_cmd ImageMath 3 "$t1bold" G "${tmp}/${id}_t1w_nativepro_NEG-rescaled.nii.gz" 0.35
      else
         Info "Subject ${id} has a synthetic BOLD image for registration"
      fi
 
+   # Compute tranform
+     if [[ ! -f "${SyN_func_warp}" ]] || [[ ! -f "${SyN_func_affine}" ]] || [[ ! -f "${SyN_func_Invwarp}" ]] ; then
+      # Syntax: $REGSCRIPT $moving $fixed $outPrefix $logfilename
+	Do_cmd $REGSCRIPT $moving $fixed $str_func_SyN $log_syn
+     else
+	Info "Subject ${id} already has FUNC <--> T1w transforms"
+     fi
 
+   # Apply transforms
+     if [[ ! -f "${fmri_in_T1nativepro}" ]] ; then
+	Do_cmd antsApplyTransforms -d 3 -i "${moving}" -r "${fixed}" -n BSpline "$transform" -o "${fmri_in_T1nativepro}" -v --float
+     else
+	Info "Subject ${id} already has a func_brain in T1w space"
+     fi
 
+     if [[ ! -f "${T1nativepro_in_func}" ]] ; then
+        Do_cmd antsApplyTransforms -d 3 -i "${T1nativepro_brain}" -r "${moving}" -n BSpline "$transformsInv" -o "${T1nativepro_in_func}" -v --float
+     else
+        Info "Subject ${id} already has a T1w_brain in FUNC space"
+     fi
+
+     if [[ -d "${func_ICA}/filtered_func_data.ica" ]]; then Do_cmd cp "${T1nativepro_in_func}" "${func_ICA}/filtered_func_data.ica/t1w2fmri_brain.nii.gz"; fi
+     if [[ -f "${SyN_func_Invwarp}" ]] ; then ((Nsteps++)); fi
 else
     Info "Subject ${id} has completed T1w-FUNC registration"; ((Nsteps++)); ((N++))
 fi
@@ -595,58 +619,58 @@ fi
 #SyN_func_affine="${str_func_SyN}0GenericAffine.mat"
 #SyN_func_warp="${str_func_SyN}1Warp.nii.gz"
 #SyN_func_Invwarp="${str_func_SyN}1InverseWarp.nii.gz"
-
-if [[ ${regAffine}  == "FALSE" ]]; then
-    # SyN from T1_nativepro to t1-nativepro
-    export reg="Affine+SyN"
-    transformsInv="-t ${SyN_func_warp} -t ${SyN_func_affine} -t [${mat_func_affine},1]" # T1nativepro to func
-    transform="-t ${mat_func_affine} -t [${SyN_func_affine},1] -t ${SyN_func_Invwarp}"  # func to T1nativepro
-    xfmat="-t ${SyN_func_affine} -t [${mat_func_affine},1]" # T1nativepro to func only lineal for FIX
-elif [[ ${regAffine}  == "TRUE" ]]; then
-    export reg="Affine"
-    transformsInv="-t [${mat_func_affine},1]"  # T1nativepro to func
-    transform="-t ${mat_func_affine}"   # func to T1nativepro
-    xfmat="-t [${mat_func_affine},1]" # T1nativepro to func only lineal for FIX
-fi
+#
+#if [[ ${regAffine}  == "FALSE" ]]; then
+#    # SyN from T1_nativepro to t1-nativepro
+#    export reg="Affine+SyN"
+#    transformsInv="-t ${SyN_func_warp} -t ${SyN_func_affine} -t [${mat_func_affine},1]" # T1nativepro to func
+#    transform="-t ${mat_func_affine} -t [${SyN_func_affine},1] -t ${SyN_func_Invwarp}"  # func to T1nativepro
+#    xfmat="-t ${SyN_func_affine} -t [${mat_func_affine},1]" # T1nativepro to func only lineal for FIX
+#elif [[ ${regAffine}  == "TRUE" ]]; then
+#    export reg="Affine"
+#    transformsInv="-t [${mat_func_affine},1]"  # T1nativepro to func
+#    transform="-t ${mat_func_affine}"   # func to T1nativepro
+#    xfmat="-t [${mat_func_affine},1]" # T1nativepro to func only lineal for FIX
+#fi
 
 # Registration to native pro
-Nreg=$(ls "$mat_func_affine" "$fmri_in_T1nativepro" "$T1nativepro_in_func" 2>/dev/null | wc -l )
-if [[ "$Nreg" -lt 3 ]]; then ((N++))
-    if [[ ! -f "${t1bold}" ]]; then
-        Info "Creating a synthetic BOLD image for registration"
-        # Inverse T1w
-        Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG.nii.gz" Neg "$T1nativepro"
-        # Dilate the T1-mask
-        #Do_cmd ImageMath 3 "${tmp}/${id}_t1w_mask_dil-2.nii.gz" MD "$T1nativepro_mask" 2
-        # Masked the inverted T1w
-        Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG_brain.nii.gz" m "${tmp}/${id}_t1w_nativepro_NEG.nii.gz" "$T1nativepro_mask"
-        # Match histograms values acording to func
-        Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG-rescaled.nii.gz" HistogramMatch "${tmp}/${id}_t1w_nativepro_NEG_brain.nii.gz" "$func_brain"
-        # Smoothing
-        Do_cmd ImageMath 3 "$t1bold" G "${tmp}/${id}_t1w_nativepro_NEG-rescaled.nii.gz" 0.35
-    else
-        Info "Subject ${id} has a synthetic BOLD image for registration"
-    fi
+#Nreg=$(ls "$mat_func_affine" "$fmri_in_T1nativepro" "$T1nativepro_in_func" 2>/dev/null | wc -l )
+#if [[ "$Nreg" -lt 3 ]]; then ((N++))
+#    if [[ ! -f "${t1bold}" ]]; then
+#        Info "Creating a synthetic BOLD image for registration"
+#        # Inverse T1w
+#        Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG.nii.gz" Neg "$T1nativepro"
+#        # Dilate the T1-mask
+#        #Do_cmd ImageMath 3 "${tmp}/${id}_t1w_mask_dil-2.nii.gz" MD "$T1nativepro_mask" 2
+#        # Masked the inverted T1w
+#        Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG_brain.nii.gz" m "${tmp}/${id}_t1w_nativepro_NEG.nii.gz" "$T1nativepro_mask"
+#        # Match histograms values acording to func
+#        Do_cmd ImageMath 3 "${tmp}/${id}_t1w_nativepro_NEG-rescaled.nii.gz" HistogramMatch "${tmp}/${id}_t1w_nativepro_NEG_brain.nii.gz" "$func_brain"
+#        # Smoothing
+#        Do_cmd ImageMath 3 "$t1bold" G "${tmp}/${id}_t1w_nativepro_NEG-rescaled.nii.gz" 0.35
+#    else
+#        Info "Subject ${id} has a synthetic BOLD image for registration"
+#    fi
+#
+#    # Affine from func to t1-nativepro
+#    Do_cmd antsRegistrationSyN.sh -d 3 -f "$t1bold" -m "$func_brain" -o "$str_func_affine" -t a -n "$threads" -p d
+#    Do_cmd antsApplyTransforms -d 3 -i "$t1bold" -r "$func_brain" -t ["$mat_func_affine",1] -o "${tmp}/T1bold_in_func.nii.gz" -v -u int
 
-    # Affine from func to t1-nativepro
-    Do_cmd antsRegistrationSyN.sh -d 3 -f "$t1bold" -m "$func_brain" -o "$str_func_affine" -t a -n "$threads" -p d
-    Do_cmd antsApplyTransforms -d 3 -i "$t1bold" -r "$func_brain" -t ["$mat_func_affine",1] -o "${tmp}/T1bold_in_func.nii.gz" -v -u int
-
-    if [[ ${regAffine}  == "FALSE" ]]; then
-        # SyN from T1_nativepro-func to func
-        Do_cmd antsRegistrationSyN.sh -d 3 -m "${tmp}/T1bold_in_func.nii.gz" -f "$func_brain" -o "$str_func_SyN" -t s -n "$threads" -p d #-i "$mat_func_affine"
-    fi
-    Do_cmd rm -rf "${dir_warp}"/*Warped.nii.gz 2>/dev/null
-    # fmri to t1-nativepro
-    Do_cmd antsApplyTransforms -d 3 -i "$func_brain" -r "$t1bold" "${transform}" -o "$fmri_in_T1nativepro" -v -u int
-    # t1-nativepro to fmri
-    Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$func_brain" "${transformsInv}" -o "${T1nativepro_in_func}" -v -u int
-
-    if [[ -d "${func_ICA}/filtered_func_data.ica" ]]; then Do_cmd cp "${T1nativepro_in_func}" "${func_ICA}/filtered_func_data.ica/t1w2fmri_brain.nii.gz"; fi
-    if [[ -f "${SyN_func_Invwarp}" ]] ; then ((Nsteps++)); fi
-else
-    Info "Subject ${id} has a func volume and transformation matrix in T1nativepro space"; ((Nsteps++)); ((N++))
-fi
+#    if [[ ${regAffine}  == "FALSE" ]]; then
+#        # SyN from T1_nativepro-func to func
+#        Do_cmd antsRegistrationSyN.sh -d 3 -m "${tmp}/T1bold_in_func.nii.gz" -f "$func_brain" -o "$str_func_SyN" -t s -n "$threads" -p d #-i "$mat_func_affine"
+#    fi
+#    Do_cmd rm -rf "${dir_warp}"/*Warped.nii.gz 2>/dev/null
+#    # fmri to t1-nativepro
+#    Do_cmd antsApplyTransforms -d 3 -i "$func_brain" -r "$t1bold" "${transform}" -o "$fmri_in_T1nativepro" -v -u int
+#    # t1-nativepro to fmri
+#    Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$func_brain" "${transformsInv}" -o "${T1nativepro_in_func}" -v -u int
+#
+#    if [[ -d "${func_ICA}/filtered_func_data.ica" ]]; then Do_cmd cp "${T1nativepro_in_func}" "${func_ICA}/filtered_func_data.ica/t1w2fmri_brain.nii.gz"; fi
+#    if [[ -f "${SyN_func_Invwarp}" ]] ; then ((Nsteps++)); fi
+#else
+#    Info "Subject ${id} has a func volume and transformation matrix in T1nativepro space"; ((Nsteps++)); ((N++))
+#fi
 
 #------------------------------------------------------------------------------#
 # Register func to Freesurfer space with Freesurfer
