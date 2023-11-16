@@ -23,13 +23,15 @@
   export FIXPATH=${softwareDir}/fix								# make sure fix knows where to find mcr (see fix/settings.sh, set FSL_FIX_MCRROOT variable)
 # export PYTHONPATH=${softwareDir}/anaconda3/bin
   export MATLABPATH=${softwareDir}/matlab
-#  export RPATH=${softwareDir}/R-3.6.3/bin
-  export RPATH=/usr/bin/R
+  export RPATH=${softwareDir}/R 								# v3.6 is necessary for micapipe
+#  export RPATH=${softwareDir}/R-3.6.3/bin 							# this no longer exists
+#  export RPATH=/usr/bin/R 									# This is v4, which is not compatible with the packages necessary for micapipe
   export customBin=${softwareDir}/bin
   export ANACONDA=${softwareDir}/anaconda3
+  export MCRPATH=${softwareDir}/mcr 								# Matlab runtime compiler
 
 # Export new PATH with all the necessary binaries
-  export PATH="${ANACONDA}:${customBin}:${MATLABPATH}:${RPATH}/bin:${AFNIDIR}:${ANTSPATH}:${workbench_path}:${FREESURFER_HOME}/bin:${mrtrixDir}/bin:${mrtrixDir}/lib:${FSLDIR}/bin:${FIXPATH}:${PATH}"
+  export PATH="${MCRPATH}:${ANACONDA}:${customBin}:${MATLABPATH}:${RPATH}/bin:${AFNIDIR}:${ANTSPATH}:${workbench_path}:${FREESURFER_HOME}/bin:${mrtrixDir}/bin:${mrtrixDir}/lib:${FSLDIR}/bin:${FIXPATH}:${PATH}"
 
 # Set the libraries paths for mrtrx and fsl (This use of LD_LIBRARY_PATH may be frowned upon :/)
   export LD_LIBRARY_PATH="${FSLDIR}/lib:${FSLDIR}/bin:${mrtrixDir}/lib:${RPATH}/lib"
