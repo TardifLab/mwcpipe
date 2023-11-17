@@ -312,6 +312,8 @@ else
   func_ICA="${tmp}/ICA_MELODIC"      # ICAOutputDirectory
 fi
 
+Info "func_ICA: ${func_ICA}"
+
 # Make directories
 for x in "$func_surf" "$func_volum"; do
     [[ ! -d "${x}" ]] && mkdir -p "${x}"
@@ -727,13 +729,17 @@ if [[ "$noFIX" -eq 0 ]]; then
               else Info "Subject ${id} has reg/highres2example_func.mat for ICA-FIX"; fi
 
                   Info "Running ICA-FIX"
+		  Info "func_ICA: ${func_ICA}"
                   Do_cmd fix "$func_ICA" "$icafixTraining" 20 -m -h 100
+		  Info "func_ICA: ${func_ICA}"
 
                   # Replace file if melodic ran correctly - Change single-echo files for clean ones
                   if [[ -f "$fix_output" ]]; then
+		      Info "FIX SUCCESS"
                       yes | Do_cmd 3dresample -orient LPI -prefix "$func_processed" -inset "$fix_output"
                       export statusFIX="YES"
                   else
+		      Info "FIX FAIL"
                       export statusFIX="FAILED"
                       Do_cmd mv -f "${func_ICA}" "${proc_func}"
                       json_func "${func_proc_json}"
