@@ -34,8 +34,9 @@ Generates multiple functional connectomes based on micapipe's provided parcellat
     func_lab    :  str
                     Identifier of type of sequence multi/single echo.
 
-    noFC      :  str
+    noFC      	:  str
                     [TRUE, FALSE]. If True skipps the functional connectomes generation.
+
 
 Created and modified from 2019 to 2022
 @author: A collaborative effort of the MICA lab  :D
@@ -84,8 +85,8 @@ else:
 
 # Find and load surface-registered cortical timeseries
 os.chdir(funcDir+'/surfaces/')
-x_lh = " ".join(glob.glob(funcDir+'/surfaces/'+'*space-conte69-32k_lh_10mm*'))
-x_rh = " ".join(glob.glob(funcDir+'/surfaces/'+'*space-conte69-32k_rh_10mm*'))
+x_lh = " ".join(glob.glob(funcDir+'/surfaces/'+'*space-conte69-32k_lh_6mm*'))
+x_rh = " ".join(glob.glob(funcDir+'/surfaces/'+'*space-conte69-32k_rh_6mm*'))
 lh_data = nib.load(x_lh)
 lh_data = np.squeeze(lh_data.get_fdata())
 rh_data = nib.load(x_rh)
@@ -302,7 +303,7 @@ del data
 
 # Process left hemisphere timeseries
 os.chdir(funcDir+'/surfaces/')
-x_lh_nat = " ".join(glob.glob(funcDir+'/surfaces/' + subject + '_func_space-fsnative_lh_10mm.mgh'))
+x_lh_nat = " ".join(glob.glob(funcDir+'/surfaces/' + subject + '_func_space-fsnative_lh_6mm.mgh'))
 lh_data_nat = nib.load(x_lh_nat)
 lh_data_nat = np.transpose(np.squeeze(lh_data_nat.get_fdata()))
 
@@ -311,7 +312,7 @@ lh_data_nat_corr = get_regressed_data(x_spike, lh_data_nat, performNSR, performG
 
 # Process right hemisphere timeseries
 os.chdir(funcDir+'/surfaces/')
-x_rh_nat = " ".join(glob.glob(funcDir+'/surfaces/'+'*_func_space-fsnative_rh_10mm.mgh'))
+x_rh_nat = " ".join(glob.glob(funcDir+'/surfaces/'+'*_func_space-fsnative_rh_6mm.mgh'))
 rh_data_nat = nib.load(x_rh_nat)
 rh_data_nat = np.transpose(np.squeeze(rh_data_nat.get_fdata()))
 
