@@ -69,5 +69,7 @@ elif [ "$2" == FC ] ; then
                 -bids $RAW_DIR \
                 -ses $SESSION \
 		-nocleanup \
+		-NSR \
+		-dropTR \
                 -proc_func
 fi
