@@ -29,7 +29,7 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
   elif [ $FUNC_ID == commit_prep ]     ; then VM=5  ;  Fn=6  ; script="${scriptdir}/04_run_commit0.sh" ;
   elif [ $FUNC_ID == commit ]          ; then VM=40 ;  Fn=7  ; script="${scriptdir}/04_run_commit1.sh" ;         	# very memory intense, not ideal if tck size > 10-15M streamlines, VM=30 works most of the time
   elif [ $FUNC_ID == connectomes ]     ; then VM=10 ;  Fn=8  ; script="${scriptdir}/05_connectomes.sh" ; 		# VM=3 works most of the time
-  elif [ $FUNC_ID == FC ]              ; then VM=10 ;  Fn=9  ; script="${scriptdir}/02_micapipe_call.sh" ;
+  elif [ $FUNC_ID == FC ]              ; then VM=20 ;  Fn=9  ; script="${scriptdir}/02_micapipe_call.sh" ;
   elif [ $FUNC_ID == conn_slice ]      ; then VM=5  ;  Fn=00 ; script="${scriptdir}/connSlicer_qbatch.sh" ;
   fi
 
@@ -38,8 +38,8 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 
 
 # Session-1
-  for SUB in {01..30} ; do
-#  for SUB in 02 ; do
+#  for SUB in {01..30} ; do
+  for SUB in 01 ; do
 
 	ID=sub-"${SUB}"
 	sub_dir="${log_func_dir}/${ID}_ses-1"
@@ -53,14 +53,14 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 
 
 # Session-2
-  for SUB in 18 {20..27} 29 ; do
+#  for SUB in 18 {20..27} 29 ; do
 
-        ID=sub-"${SUB}"
-        sub_dir="${log_func_dir}/${ID}_ses-2"
-        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
-        cd ${sub_dir}                                                                                           # cd or logs will output in cwd
+#        ID=sub-"${SUB}"
+#        sub_dir="${log_func_dir}/${ID}_ses-2"
+#        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
+#        cd ${sub_dir}                                                                                           # cd or logs will output in cwd
 
         # Call to desired function
 #       qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" ${script} $SUB $FUNC_ID "2"                            # Standard call
-        qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "2"    # option to gauge resource allocation
-  done
+#        qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "2"    # option to gauge resource allocation
+#  done
