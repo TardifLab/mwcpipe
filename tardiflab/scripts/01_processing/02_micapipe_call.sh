@@ -71,5 +71,6 @@ elif [ "$2" == FC ] ; then
 		-nocleanup \
 		-NSR \
 		-dropTR \
+		-trainClassifier \
                 -proc_func
 fi

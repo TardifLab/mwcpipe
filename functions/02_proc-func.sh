@@ -43,7 +43,8 @@ sesAnat=${19}
 regAffine=${20}
 dropTR=${21}
 noFC=${22}
-PROC=${23}
+trainClassifier=${23}
+PROC=${24}
 export OMP_NUM_THREADS=$threads
 here=$(pwd)
 
@@ -88,6 +89,7 @@ Note "Phase scan       :" "$func_pe"
 Note "Reverse Phase    :" "$func_rpe"
 Note "Smoothing        :" "$smooth"
 Note "No FIX           :" "$noFIX"
+Note "Stop at FIX      :" "$trainClassifier"
 Note "Perform NSR      :" "$performNSR"
 Note "Perform GSR      :" "$performGSR"
 Note "Longitudinal ses :" "$sesAnat"
@@ -210,6 +212,13 @@ if [[ ${changeTopupConfig} == "DEFAULT" ]]; then
 else
     topupConfigFile=${changeTopupConfig}
     Info "Will use specified config file for TOPUP: ${topupConfigFile}"
+fi
+
+# Check Classifier training
+if [[ "$trainClassifier" -eq 1 ]]; then
+    Info "Func processing will stop at FIX to allow manual IC labeling and classifier training"
+else
+    Info "Func processing will proceed through FIX according to your input to noFIX"
 fi
 
 # Check FIX: run or no?
@@ -689,6 +698,9 @@ else
 fi
 
 #------------------------------------------------------------------------------#
+# Check if processing should stop here to allow manual IC labeling and FIX classifier training (Tardiflab mod)
+if [[ "$trainClassifier" -eq 1 ]]; then Info "Halting func processing here to allow manual IC labeling and FIX classifier training"; exit ; fi
+
 # run ICA-FIX IF melodic ran succesfully
 fix_output="${func_ICA}/filtered_func_data_clean.nii.gz"
 func_processed="${func_volum}/${idBIDS}${func_lab}_clean.nii.gz"
@@ -700,16 +712,16 @@ if [[ "$noFIX" -eq 0 ]]; then
               Info "Getting ICA-FIX requirements"
               Do_cmd mkdir -p "${func_ICA}"/{reg,mc}
               # FIX requirements - https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FIX/UserGuide
-              # $fmri_filtered                                                                                 preprocessed 4D data
-              # $melodic_IC                                                                                    melodic (command-line program) full output directory
-              Do_cmd cp "${func_mc}" "${func_ICA}/mc/prefiltered_func_data_mcf.par"   # motion parameters created by mcflirt
-              Do_cmd cp "$fmri_mask" "${func_ICA}/mask.nii.gz"                                                 # valid mask relating to the 4D data
-              Do_cmd cp "${func_ICA}/filtered_func_data.ica/mean.nii.gz" "${func_ICA}/mean_func.nii.gz"      # temporal mean of 4D data
+              # $fmri_filtered                                                                                  preprocessed 4D data
+              # $melodic_IC                                                                                     melodic (command-line program) full output directory
+              Do_cmd cp "${func_mc}" "${func_ICA}/mc/prefiltered_func_data_mcf.par"   				# motion parameters created by mcflirt
+              Do_cmd cp "$fmri_mask" "${func_ICA}/mask.nii.gz"                                                 	# valid mask relating to the 4D data
+              Do_cmd cp "${func_ICA}/filtered_func_data.ica/mean.nii.gz" "${func_ICA}/mean_func.nii.gz"      	# temporal mean of 4D data
               middleSlice=$(mrinfo "$fmri_filtered" -size | awk -F ' ' '{printf "%.0f\n", $4/2}')
-              Do_cmd fslroi "$fmri_filtered" "${func_ICA}/reg/example_func.nii.gz" "$middleSlice" 1          # example middle image from 4D data
-              Do_cmd cp "$T1nativepro_brain" "${func_ICA}/reg/highres.nii.gz"                                  # brain-extracted structural
+              Do_cmd fslroi "$fmri_filtered" "${func_ICA}/reg/example_func.nii.gz" "$middleSlice" 1          	# example middle image from 4D data
+              Do_cmd cp "$T1nativepro_brain" "${func_ICA}/reg/highres.nii.gz"                                  	# brain-extracted structural
 
-              # REQUIRED by FIX - reg/highres2example_func.mat                                               # FLIRT transform from structural to functional space
+              # REQUIRED by FIX - reg/highres2example_func.mat                                               	# FLIRT transform from structural to functional space
               if [[ ! -f "${func_ICA}/reg/highres2example_func.mat" ]]; then
                   # Get transformation matrix T1native to func space (ICA-FIX requirement)
                   Do_cmd antsApplyTransforms -v 1 -o Linear["$tmp/highres2example_func.mat",0] "${xfmat}"
