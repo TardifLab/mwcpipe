@@ -400,17 +400,27 @@ fi
 #------------------------------------------------------------------------------#
 #---------------------------- Tardiflab Mod section ---------------------------#
 
+  dwi_corr_up="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
+  if [[ ! -f "$dwi_corr_up" ]]; then
+        Info "Upscaling DWI to T1w resolution"
+        # Getting some metrics 
+        voxel=($(mrinfo $T1nativepro -spacing))
+        Do_cmd mrgrid $dwi_corr regrid -voxel $voxel $dwi_corr_up
+        ((Nsteps++))
+  else
+      Info "Subject ${id} has a upscaled DWI image"; ((Nsteps++))
+  fi
+
 # Compute DWI b0 & brain mask
   dwi_b0="${proc_dwi}/${idBIDS}_space-dwi_desc-b0.nii.gz" 				# This should be a NIFTI for compatibility with ANTS
   dwi_b0_brain="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain.nii.gz"
   dwi_mask_tmp="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
   dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain_mask_erode.nii.gz"
-
   if [[ ! -f "$dwi_b0" ]] || [[ ! -f "$dwi_mask" ]]  ; then
 
       # Extract b0s and compute mean
         Info "Computing DWI-b0"
-	dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0" -axis 3 -force
+	dwiextract -force -nthreads "$threads" "$dwi_corr_up" - -bzero | mrmath - mean "$dwi_b0" -axis 3 -force
 
       # Compute DWI brain maks with FSL Bet
 	Info "Creating DWI binary mask of processed volumes"
@@ -465,7 +475,7 @@ dti_FA="${proc_dwi}/${idBIDS}_space-dwi_model-DTI_map-FA.nii.gz"
 dti_ADC="${proc_dwi}/${idBIDS}_space-dwi_model-DTI_map-ADC.nii.gz"
 if [[ ! -f "$dti_FA" ]]; then
       Info "Calculating basic DTI metrics"
-      dwi2tensor -mask "$dwi_mask" -nthreads "$threads" "$dwi_corr" "$dwi_dti"
+      dwi2tensor -mask "$dwi_mask" -nthreads "$threads" "$dwi_corr_up" "$dwi_dti"
       tensor2metric -nthreads "$threads" -fa "$dti_FA" -adc "$dti_ADC" "$dwi_dti"
       Do_cmd mrinfo "$dwi_dti" -json_all "${dwi_dti/mif/json}"
       if [[ -f "$dti_FA" ]]; then ((Nsteps++)); fi
@@ -490,8 +500,8 @@ if [[ ! -f "$fod_wmN" ]]; then
             fod_gm="${tmp}/${idBIDS}_gm_fod.mif"
             fod_csf="${tmp}/${idBIDS}_csf_fod.mif"
 
-            Do_cmd dwi2response "$rf" -nthreads "$threads" "$dwi_corr" "$rf_wm" "$rf_gm" "$rf_csf" -mask "$dwi_mask"
-            Do_cmd dwi2fod -nthreads "$threads" msmt_csd "$dwi_corr" \
+            Do_cmd dwi2response "$rf" -nthreads "$threads" "$dwi_corr_up" "$rf_wm" "$rf_gm" "$rf_csf" -mask "$dwi_mask"
+            Do_cmd dwi2fod -nthreads "$threads" msmt_csd "$dwi_corr_up" \
                 "$rf_wm" "$fod_wm" \
                 "$rf_gm" "$fod_gm" \
                 "$rf_csf" "$fod_csf" \
@@ -518,24 +528,14 @@ fi
   fod_wm="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.nii.gz"
   fod_gm="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-gmNorm.nii.gz"
   fod_combo="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-combined-gm-wm.nii.gz"
-  dwi_b0_hires="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_upsampled.nii.gz"
-  fod_combo_hires="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-combined-gm-wm-upsampled.nii.gz"
 
-
-  if [[ ! -f "$dwi_b0_hires" ]] || [[ ! -f "$fod_combo_hires" ]]; then
-
-	Info "Computing GM-WM-COMBO-FOD & b0 at T1w resoluton for subject ${id}"
+  if [[ ! -f "$fod_combo" ]]; then
+	Info "Computing GM-WM-COMBO-FOD for subject ${id}"
       # Extract 1st volume from wm & gm FODs & convert to nifti
-  	Do_cmd mrconvert -coord 3 0 "$fod_wmN" "$fod_wm"
-  	Do_cmd mrconvert -coord 3 0 "$fod_gmN" "$fod_gm"
-
+      Do_cmd mrconvert -coord 3 0 "$fod_wmN" "$fod_wm"
+      Do_cmd mrconvert -coord 3 0 "$fod_gmN" "$fod_gm"
       # Combine into single image with good gm wm contrast
-   	Do_cmd fslmaths "$fod_wm" -mul 2 -add "$fod_gm" "$fod_combo"
-
-      # Upsample b0 & combo fod
-  	Do_cmd mrgrid "$dwi_b0_brain" regrid -vox 1.0 "$dwi_b0_hires" 		# WARNING: Resolution harcoded
-  	Do_cmd mrgrid "$fod_combo" regrid -vox 1.0 "$fod_combo_hires"
-
+      Do_cmd fslmaths "$fod_wm" -mul 2 -add "$fod_gm" "$fod_combo"
   else
       Info "Subject ${id} upsampled b0 & combo FOD"; ((Nsteps++))
   fi
@@ -561,7 +561,7 @@ fi
 
       # Compute transform
       # REGSCRIPT $moving $fixed1 $fixed2 $outprefix $logfile
-  	"$regScript" "$T1nativepro_brain" "$dwi_b0_hires" "$fod_combo_hires" "$dwi_SyN_str" "$log_syn"
+  	"$regScript" "$T1nativepro_brain" "$dwi_b0_brain" "$fod_combo" "$dwi_SyN_str" "$log_syn"
 
 #	trans_T12dwi="-t ${dwi_SyN_warp} -t ${dwi_SyN_affine}" 					# T1nativepro to DWI
 #       trans_dwi2T1="-t [${dwi_SyN_affine},1] -t ${dwi_SyN_Invwarp}"  				# DWI to T1nativepro
@@ -677,7 +677,7 @@ eri=$(echo "$lopuu - $aloita" | bc)
 eri=$(echo print "$eri"/60 | perl)
 
 # Notification of completition
-if [ "$Nsteps" -eq 10 ]; then status="COMPLETED"; else status="INCOMPLETE"; fi
+if [ "$Nsteps" -eq 11 ]; then status="COMPLETED"; else status="INCOMPLETE"; fi
 Title "DWI processing ended in \033[38;5;220m $(printf "%0.3f\n" "$eri") minutes \033[38;5;141m:
 \t\tSteps completed: $(printf "%02d" "$Nsteps")/10
 \tStatus          : ${status}
