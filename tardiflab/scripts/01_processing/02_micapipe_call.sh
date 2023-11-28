@@ -34,7 +34,7 @@ if [ "$2" == volumetric ] ; then
 elif [ "$2" == post_structural ] ; then
       # POST-structural processing
   	${MICAPIPE}/micapipe \
-        	-sub $1 \
+              	-sub $1 \
               	-out $OUT_DIR \
               	-bids $RAW_DIR \
               	-ses $SESSION \
@@ -47,7 +47,8 @@ elif [ "$2" == dwi ] ; then
               	-out $OUT_DIR \
               	-bids $RAW_DIR \
               	-ses $SESSION \
-		-nocleanup \
+        		-nocleanup \
+                -dwi_upscale \
               	-proc_dwi
 
 elif [ "$2" == SC ] ; then

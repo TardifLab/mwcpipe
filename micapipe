@@ -77,6 +77,8 @@ echo -e "
 \t\t\t\t        Default = 61 . This value will vary from DWI acquisition and from scanner to scanner (3T or 7T)
 \t\t\\033[38;5;120m-no_bvalue_scaling\033[0m   : Disable scaling of diffusion b-values by the square of the corresponding DW gradient norm.
 \t\t\t\t        Default is scaling. See more on MRtrix3 documentation
+\t\t\\033[38;5;120m-dwi_upscale      \033[0m   : Upscale corrected DWI to T1w resolution.
+\t\t\t\t        Default is no upscaling.
 
 \t\033[38;5;197m-proc_func (-proc_rsfmri is deprecated)\033[0m
 \t\t\033[38;5;120m-mainScanStr\033[0m         : String to manually identify the main scan for func processing (eg. func/sub-001_<mainScanStr>.nii.gz)
@@ -233,6 +235,10 @@ do
   ;;
   -no_bvalue_scaling)
     bvalscale=no
+    shift
+  ;;
+  -dwi_upscale)
+    dwi_upscale=TRUE
     shift
   ;;
   -proc_rsfmri)
@@ -544,6 +550,7 @@ if [ -z ${rpe_all} ]; then rpe_all="FALSE"; else rpe_all="TRUE"; fi
 if [[ $dwi_acq == "TRUE" ]]; then dwi_str=${dwi_str}; else dwi_str=DEFAULT; fi
 if [ -z ${b0thr} ]; then b0thr=61; else b0thr=${b0thr}; fi
 if [ -z ${bvalscale} ]; then bvalscale=DEFAULT; else bvalscale=no; fi
+if [ -z ${dwi_upscale} ]; then dwi_upscale=FALSE; else dwi_upscale=TRUE; fi
 
 # Get the real path of the Inputs
 inputs_realpath
@@ -716,7 +723,7 @@ fi
 #  Diffusion processing
 if [ "$ALL" = "TRUE" ] || [ "$procDWI" = "TRUE" ]; then
     log_file_str=$dir_logs/proc_dwi_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/02_proc-dwi.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $dwi_main $dwi_rpe $dwi_processed $rpe_all $regAffine $dwi_str $b0thr $bvalscale"
+    COMMAND="${scriptDir}/02_proc-dwi.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $dwi_main $dwi_rpe $dwi_processed $rpe_all $regAffine $dwi_str $b0thr $bvalscale $dwi_upscale"
     # mica.q - Diffusion processing
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Diffusion processing"

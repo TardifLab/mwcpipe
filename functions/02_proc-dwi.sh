@@ -30,7 +30,8 @@ regAffine=${12}
 dwi_str=${13}
 b0thr=${14}
 bvalscale=${15}
-PROC=${16}
+dwi_upscale=${16}
+PROC=${17}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -55,6 +56,7 @@ Note "dwi_acq       :" "$dwi_str"
 Note "Affine only   :" "$regAffine"
 Note "B0 threshold  :" "$b0thr"
 Note "bvalue scaling:" "$bvalscale"
+Note "dwi upscaling :" "$dwi_upscale"
 Note "Processing    :" "$PROC"
 
 # mtrix configuration file
@@ -133,7 +135,8 @@ Nsteps=0
 
 # Create script specific temp directory
 #tmp="${tmpDir}/${RANDOM}_micapipe_proc-dwi_${id}"
-tmp=${tmpDir}/02_proc-dwi/${subject}/${SES}
+#tmp=${tmpDir}/02_proc-dwi/${subject}/${SES}       ####Original micapipe scrit
+tmp=$proc_dwi/tmp         #### Added line for testing. Delete after finished
 Do_cmd mkdir -p "$tmp"
 
 [[ ! -d "$dir_QC_png" ]] && Do_cmd mkdir "$dir_QC_png"
@@ -400,6 +403,7 @@ fi
 #------------------------------------------------------------------------------#
 #---------------------------- Tardiflab Mod section ---------------------------#
 
+if [[ "$dwi_upscale" == "TRUE" ]]; then
   dwi_corr_up="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
   if [[ ! -f "$dwi_corr_up" ]]; then
         Info "Upscaling DWI to T1w resolution"
@@ -410,21 +414,24 @@ fi
   else
       Info "Subject ${id} has a upscaled DWI image"; ((Nsteps++))
   fi
+  dwi_corr="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
+fi
 
 # Compute DWI b0 & brain mask
   dwi_b0="${proc_dwi}/${idBIDS}_space-dwi_desc-b0.nii.gz" 				# This should be a NIFTI for compatibility with ANTS
   dwi_b0_brain="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain.nii.gz"
-  dwi_mask_tmp="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
-  dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain_mask_erode.nii.gz"
+  dwi_mask_tmp="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
+  dwi_mask="${proc_dwi}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
   if [[ ! -f "$dwi_b0" ]] || [[ ! -f "$dwi_mask" ]]  ; then
 
       # Extract b0s and compute mean
         Info "Computing DWI-b0"
-	dwiextract -force -nthreads "$threads" "$dwi_corr_up" - -bzero | mrmath - mean "$dwi_b0" -axis 3 -force
+    	dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0" -axis 3 -force
 
       # Compute DWI brain maks with FSL Bet
-	Info "Creating DWI binary mask of processed volumes"
-        Do_cmd bet "$dwi_b0" "$dwi_b0_brain" -m -v # -B -f 0.25
+    	Info "Creating DWI binary mask of processed volumes"
+        Do_cmd bet "$dwi_b0" "$dwi_b0_brain" -v # -B -f 0.25
+        Do_cmd fslmaths $dwi_b0_brain $dwi_mask_tmp
         Do_cmd maskfilter "$dwi_mask_tmp" erode -npass 1 "$dwi_mask"
 
 	if [[ -f "$dwi_mask" ]]; then ((Nsteps++)); fi
@@ -475,7 +482,7 @@ dti_FA="${proc_dwi}/${idBIDS}_space-dwi_model-DTI_map-FA.nii.gz"
 dti_ADC="${proc_dwi}/${idBIDS}_space-dwi_model-DTI_map-ADC.nii.gz"
 if [[ ! -f "$dti_FA" ]]; then
       Info "Calculating basic DTI metrics"
-      dwi2tensor -mask "$dwi_mask" -nthreads "$threads" "$dwi_corr_up" "$dwi_dti"
+      dwi2tensor -mask "$dwi_mask" -nthreads "$threads" "$dwi_corr" "$dwi_dti"
       tensor2metric -nthreads "$threads" -fa "$dti_FA" -adc "$dti_ADC" "$dwi_dti"
       Do_cmd mrinfo "$dwi_dti" -json_all "${dwi_dti/mif/json}"
       if [[ -f "$dti_FA" ]]; then ((Nsteps++)); fi
@@ -500,8 +507,8 @@ if [[ ! -f "$fod_wmN" ]]; then
             fod_gm="${tmp}/${idBIDS}_gm_fod.mif"
             fod_csf="${tmp}/${idBIDS}_csf_fod.mif"
 
-            Do_cmd dwi2response "$rf" -nthreads "$threads" "$dwi_corr_up" "$rf_wm" "$rf_gm" "$rf_csf" -mask "$dwi_mask"
-            Do_cmd dwi2fod -nthreads "$threads" msmt_csd "$dwi_corr_up" \
+            Do_cmd dwi2response "$rf" -nthreads "$threads" "$dwi_corr" "$rf_wm" "$rf_gm" "$rf_csf" -mask "$dwi_mask"
+            Do_cmd dwi2fod -nthreads "$threads" msmt_csd "$dwi_corr" \
                 "$rf_wm" "$fod_wm" \
                 "$rf_gm" "$fod_gm" \
                 "$rf_csf" "$fod_csf" \
@@ -536,10 +543,22 @@ fi
       Do_cmd mrconvert -coord 3 0 "$fod_gmN" "$fod_gm"
       # Combine into single image with good gm wm contrast
       Do_cmd fslmaths "$fod_wm" -mul 2 -add "$fod_gm" "$fod_combo"
+
+    if [[ ${dwi_upscale} != "TRUE" ]]; then
+        # Upsample b0 & combo fod
+        dwi_b0_hires="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_upsampled.nii.gz"
+        fod_combo_hires="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-combined-gm-wm_upsampled.nii.gz"
+        voxel=($(mrinfo $T1nativepro -spacing))
+      	Do_cmd mrgrid "$dwi_b0_brain" regrid -voxel $voxel "$dwi_b0_hires"
+  	    Do_cmd mrgrid "$fod_combo" regrid -voxel $voxel "$fod_combo_hires"
+        dwi_b0_brain="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_upsampled.nii.gz"
+        fod_combo="${tmp}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-combined-gm-wm_upsampled.nii.gz"
+        ((Nsteps++))
+    fi 
+
   else
       Info "Subject ${id} upsampled b0 & combo FOD"; ((Nsteps++))
   fi
-
 
 #------------ SyN Registration T1w-DWI space
 
@@ -573,9 +592,9 @@ fi
 # Apply transforms
   if  [[ ! -f "$dwi_5tt" ]] || [[ ! -f "$T1nativepro_in_dwi_NL" ]] || [[ ! -f "$T1nativepro_brain_in_dwi_NL" ]]; then
         Info "Registering T1w and 5TT to DWI space"
-        Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_brain_in_dwi_NL" -v --float
-        Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_in_dwi_NL" -v --float
-        Do_cmd antsApplyTransforms -d 3 -i "$T15ttgen" -r "$fod_combo_hires" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$dwi_5tt" -v --float -e 3
+        Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$fod_combo" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_brain_in_dwi_NL" -v --float
+        Do_cmd antsApplyTransforms -d 3 -i "$T1nativepro" -r "$fod_combo" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$T1nativepro_in_dwi_NL" -v --float
+        Do_cmd antsApplyTransforms -d 3 -i "$T15ttgen" -r "$fod_combo" -n BSpline -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -o "$dwi_5tt" -v --float -e 3
 
         if [[ -f "$dwi_5tt" ]]; then ((Nsteps++)); fi
   else

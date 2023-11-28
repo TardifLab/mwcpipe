@@ -72,7 +72,7 @@ export idBIDS="${subject}${ses}"
   export dir_QC_png=$subject_dir/QC/png                 			# directory with QC files
 
   # post structural Files (the resolution might vary depending on the dataset)
-  if [ -f "${proc_struct}"/"${idBIDS}"_space-nativepro_t1w.nii.gz ]; then
+  if [ -f ${proc_struct}/${idBIDS}_space-nativepro_t1w.nii.gz ]; then
       export res=$(mrinfo "${proc_struct}"/"${idBIDS}"_space-nativepro_t1w.nii.gz -spacing | awk '{printf "%.1f\n", $2}')
       export T1nativepro=${proc_struct}/${idBIDS}_space-nativepro_t1w.nii.gz
       export T1nativepro_brain=${proc_struct}/${idBIDS}_space-nativepro_t1w_brain.nii.gz
@@ -80,6 +80,7 @@ export idBIDS="${subject}${ses}"
       export T1freesurfr=${dir_freesurfer}/mri/T1.mgz
       export T15ttgen=${proc_struct}/${idBIDS}_space-nativepro_t1w_5TT.nii.gz
       export T1fast_seg=$proc_struct/first/${idBIDS}_space-nativepro_t1w_all_fast_firstseg.nii.gz
+
   fi
 
   # Native midsurface in gifti format
