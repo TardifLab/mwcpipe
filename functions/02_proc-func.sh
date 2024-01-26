@@ -501,7 +501,7 @@ if [[ ! -f "$fmri_mask" ]] || [[ ! -f "$func_brain" ]]; then ((N++))
     Do_cmd fslmaths "$func_nii" -Tmean "$fmri_mean"
 
     # Creates a mask from the motion corrected time series
-    Do_cmd bet "$fmri_mean" "$func_brain" -m -n
+    Do_cmd bet "$fmri_mean" "$func_brain" -m -n -f 0.4
 
     # masked mean func time series
     Do_cmd fslmaths "$fmri_mean" -mul "$fmri_mask" "$func_brain"
