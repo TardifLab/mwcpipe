@@ -41,7 +41,7 @@
 
   mv tmpfile.csv subject_IC_counts.csv;
 
-
+  echo "Great success! Find IC counts here --> ${datadir}/subject_IC_counts.csv"
 
 
 
