@@ -31,7 +31,7 @@ echo -e "
 \t\033[38;5;197m-proc_dwi\033[0m         : DWI-Diffusion weighted images processing with MRtrix3
 \t\t\t      ( Requires: -proc_structural )
 
-   Flags for third stage, the  connectome generation:
+   Flags for third stage, the connectome generation:
 \t\033[38;5;197m-proc_func\033[0m        : Funtional MRI processing and functional connectome generation
 \t\t\t      ( Requires: -proc_structural, -proc_freesurfer and -post_structural )
 \t\033[38;5;197m-SC\033[0m               : Structural connectome generation
@@ -42,6 +42,10 @@ echo -e "
 \t\t\t      ( Requires: -proc_freesurfer and -post_structural )
 \t\033[38;5;197m-Morphology\033[0m       : Cortical morphology analysis (Thickness and curvature)
 \t\t\t      ( Requires: -proc_freesurfer and -post_structural )
+
+   Flags for fourth stage, the modified connectomes:
+\t\033[38;5;197m-proc_COMMIT\033[0m      : Tract-specific processing and connectome generation
+\t\t\t      ( Requires: -proc_dwi, -post_structural and -SC )
 
 \033[38;5;141mOPTIONAL ARGUMENTS FOR SUBMODULES:\033[0m
 \t\033[38;5;197m-proc_structural\033[0m
@@ -111,15 +115,26 @@ echo -e "
 \t\t\033[38;5;120m-regAffine\033[0m           : Specify this option to perform an Affine registration ONLY from func to T1w.
 \t\t\t\t         ( default is non linear registration SyN )
 \t\t\033[38;5;120m-dropTR\033[0m              : Specify this option to drop the first five TRs.
-\t\t\t            ( default is FALSE  )
+\t\t\t\t         ( default is FALSE  )
 \t\t\033[38;5;120m-noFC\033[0m                : Specify this option to skip the Functional Connectome generation (e.g. func-task).
-\t\t\t            ( default is FALSE  )
+\t\t\t\t         ( default is FALSE  )
 
 \t\033[38;5;197m-SC\033[0m
 \t\t\033[38;5;120m-tracts <numeric>\033[0m    : Number of streamlines, where 'M' stands for millions (default=40M)
 \t\t\033[38;5;120m-keep_tck\033[0m            : If provided, the tractogram will be copied to '<output>/micapipe/<subject>/dwi'
 \t\t\033[38;5;120m-autoTract\033[0m           : Automatic tractogram segmentation (This is an optional procedure)
-\t\t\033[38;5;120m-filter\033[0m              : Algorithm for tractogram filtering ( default = 'SIFT2' ['COMMIT2', 'both'])
+\t\t\033[38;5;120m-filter\033[0m              : Algorithm for tractogram filtering ( default = 'SIFT2', other option: 'COMMIT2', 'both')
+\t\t\t\t         (COMMIT2 option is required if running proc_COMMIT after) 
+\t\t\033[38;5;120m-tractometry\033[0m         : Option to perform tractometry using the generated tractogram 
+\t\t\t\t         (If there are multiple images, put all of them in a single argument! e.g., -tractometry 'image1 image2 image3') 
+
+\t\033[38;5;197m-proc_COMMIT\033[0m
+\t\t\033[38;5;120m-MTsat_DWI\033[0m           : MTsat image already registered to diffusion space
+\t\t\t\t         (MTsat image required if performing MySD or g-ratio) 
+\t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (BIDS format) that will be used to calibrate the alpha factor for MVF calculation
+\t\t\033[38;5;120m-MySD\033[0m                : Run MySD and calculate tract-specific myelin volume
+\t\t\033[38;5;120m-gratio\033[0m              : Run MySD and COMMIT, and calculate tract-specific g-ratio
+\t\t\033[38;5;120m-DualMTR\033[0m             : Descriptions
 
 \t\033[38;5;197m-MPC\033[0m
 \t\t\033[38;5;120m-microstructural_img\033[0m : Path to scan on which MPC will be performed ( ./img.nii.gz )
@@ -326,6 +341,16 @@ do
     postDWI=TRUE
     shift
   ;;
+  -tractometry)
+    tractometry=TRUE
+    tractometry_input=$2
+    shift;shift
+  ;;
+  -filter)
+    filter=TRUE
+    filter_input=$2
+    shift;shift
+  ;;
   -GD)
     postGD=TRUE
     shift
@@ -333,6 +358,28 @@ do
   -Morphology)
     postMorph=TRUE
     shift
+  ;;
+  -proc_COMMIT)
+    proc_COMMIT=TRUE
+    shift
+  ;;
+  -MVFalpha_list)
+    MVFalpha_list=TRUE
+    MVFalpha_list_input=$2
+    shift;shift
+  ;;
+  -MySD)
+    MySD=TRUE
+    shift
+  ;;
+  -gratio)
+    gratio=TRUE
+    shift
+  ;;
+  -MTsat_DWI)
+    MTsat_DWI=TRUE
+    MTsat_DWI_input=$2
+    shift;shift
   ;;
   -MPC)
     postMPC=TRUE
@@ -473,7 +520,7 @@ fi
 # argument check out & WARNINGS
 missing_arg
 
-runs=($ALL $procVOL $procFS $postVOL $procDWI $procFunc $postDWI $postGD $postMorph $postMPC $qtest $qcsubj $cleanup)
+runs=($ALL $procVOL $procFS $postVOL $procDWI $procFunc $postDWI $proc_COMMIT $postGD $postMorph $postMPC $qtest $qcsubj $cleanup)
 if [ "${#runs[@]}" -lt 1 ]; then
 Error "A processing flag is missing:
                     -proc_structural
@@ -482,6 +529,7 @@ Error "A processing flag is missing:
                     -proc_dwi
                     -proc_func
                     -SC
+                    -proc_COMMIT
                     -MPC
                     -GD
                     -Morphology
@@ -526,6 +574,14 @@ if [[ $mpc_acq == "TRUE" ]]; then mpc_str=${mpc_str}; else mpc_str=DEFAULT; fi
 if [ -z ${tracts} ]; then tracts=40M; else tracts=$tracts; fi
 if [ -z ${autoTract} ]; then autoTract=FALSE; else autoTract=TRUE; fi
 if [ -z ${keep_tck} ]; then keep_tck=FALSE; else keep_tck=TRUE; fi
+if [ -z ${tractometry} ]; then tractometry=FALSE; else tractometry=TRUE; fi
+if [ -z ${filter} ]; then filter="SIFT2"; else filter=$filter_input; fi
+
+# Optional arguments proc_COMMIT
+if [ -z ${MVFalpha_list} ]; then MVFalpha_list=FALSE; else MVFalpha_list=$MVFalpha_list_input; fi
+if [ -z ${MySD} ]; then MySD=FALSE; else MySD=TRUE; fi
+if [ -z ${gratio} ]; then gratio=FALSE; else gratio=TRUE; fi
+if [ -z ${MTsat_DWI} ]; then MTsat_DWI=FALSE; else MTsat_DWI=$MTsat_DWI_input; fi
 
 # Optional arguments proc_dwi
 # User provided DWI main phase
@@ -874,25 +930,54 @@ fi
 # -----------------------------------------------------------------------------------------------#
 #       SC: Structural Connectome processing (tractography)
 # -----------------------------------------------------------------------------------------------#
-#   REQUIRES -proc_dwi
+#   REQUIRES -proc_dwi 
 if [ "$ALL" = "TRUE" ] || [ "$postDWI" = "TRUE" ]; then
     log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/03_SC.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $tracts $autoTract $keep_tck $dwi_str"
+    COMMAND="${scriptDir}/03_SC.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $tracts $autoTract $keep_tck $dwi_str $filter $tractometry"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - POST DWI processing (tractography)"
         Warning "This option only works on the MICA workstations"
         export PROC="qsub-MICA"
         # Info "Setting a warper to run on mica.q"
-        qsub -q mica.q -pe smp 20-40 -l h_vmem=1.5G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
-             $COMMAND $PROC
+        qsub -q mica.q -pe smp 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
+             $COMMAND "$tractometry_input" $PROC
     # all.q - post-DWI processing (tractography)
     elif [[ $qall == "TRUE" ]]; then
         Info "all.q qsub - POST DWI processing (tractography)"
         Warning "This option only works on the McGill BIC network"
         export PROC="qsub-all.q"
         # Info "Setting a warper to run on all.q"
-        qsub -q all.q -pe all.pe 20-40 -l h_vmem=1.5G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
+        qsub -q all.q -pe all.pe 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
+             $COMMAND "$tractometry_input" $PROC
+    else
+        # LOCAL - post-DWI processing (tractography)
+        $COMMAND "$tractometry_input" $PROC 2>&1 | tee -a ${log_file_str}.txt
+    fi
+fi
+
+# -----------------------------------------------------------------------------------------------#
+#       proc_COMMIT: tract-specific processing 
+# -----------------------------------------------------------------------------------------------#
+#   REQUIRES -proc_dwi 
+if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
+    log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
+    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat_DWI"
+    # mica.q - post-DWI processing (tractography)
+    if [[ $micaq == "TRUE" ]]; then
+        Info "MICA qsub - Tract-specific processing (COMMIT)"
+        Warning "This option only works on the MICA workstations"
+        export PROC="qsub-MICA"
+        # Info "Setting a warper to run on mica.q"
+        qsub -q mica.q -pe smp 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
+             $COMMAND $PROC
+    # all.q - post-DWI processing (tractography)
+    elif [[ $qall == "TRUE" ]]; then
+        Info "all.q qsub - Tract-specific processing (COMMIT)"
+        Warning "This option only works on the McGill BIC network"
+        export PROC="qsub-all.q"
+        # Info "Setting a warper to run on all.q"
+        qsub -q all.q -pe all.pe 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
              $COMMAND $PROC
     else
         # LOCAL - post-DWI processing (tractography)
