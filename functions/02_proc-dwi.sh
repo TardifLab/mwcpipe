@@ -199,7 +199,7 @@ if [[ "$dwi_processed" == "FALSE" ]] && [[ ! -f "$dwi_corr" ]]; then
 
           # Denoise DWI and calculate residuals
           Info "DWI MP-PCA denoising and Gibbs ringing correction"
-	  dwi_dns="${tmp}/MP-PCA_degibbs.mif"
+	      dwi_dns="${tmp}/MP-PCA_degibbs.mif"
           dwi_dns_tmp="${tmp}/MP-PCA_dwi.mif"
           Do_cmd dwidenoise "$dwi_cat" "$dwi_dns_tmp" -nthreads "$threads"
           mrcalc "$dwi_cat" "$dwi_dns_tmp" -subtract - -nthreads "$threads" | mrmath - mean "$dwi_res" -axis 3
@@ -582,7 +582,7 @@ fi
       # REGSCRIPT $moving $fixed1 $fixed2 $outprefix $logfile
   	"$regScript" "$T1nativepro_brain" "$dwi_b0_brain" "$fod_combo" "$dwi_SyN_str" "$log_syn"
 
-#	trans_T12dwi="-t ${dwi_SyN_warp} -t ${dwi_SyN_affine}" 					# T1nativepro to DWI
+#	    trans_T12dwi="-t ${dwi_SyN_warp} -t ${dwi_SyN_affine}" 					    # T1nativepro to DWI
 #       trans_dwi2T1="-t [${dwi_SyN_affine},1] -t ${dwi_SyN_Invwarp}"  				# DWI to T1nativepro
         if [[ -f "$dwi_SyN_warp" ]]; then ((Nsteps++)); fi
   else
@@ -657,6 +657,7 @@ fi
 
 #------------------------------------------------------------------------------#
 # QC of the tractography
+<<tdi
 tracts=1M
 tdi_1M="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD1-${tracts}_tdi.mif"
 export tckjson="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD1-${tracts}_tractography.json"
@@ -685,7 +686,7 @@ if [[ ! -f "$tdi_1M" ]]; then
 else
       Info "Subject ${id} has a Tract Density Image for QC 1M streamlines"; ((Nsteps++))
 fi
-
+tdi
 # -----------------------------------------------------------------------------------------------
 # QC: Input files
 QC_proc-dwi "${dir_QC}/micapipe_QC_proc-dwi${dwi_str_}.txt"
