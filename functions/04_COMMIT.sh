@@ -99,7 +99,7 @@ if [[ ${MySD}  == "TRUE" || ${gratio}  == "TRUE" ]] && [[ ! -f "$alpha" ]]; then
                    -t ["$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
                    -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
                    -o "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz"
-            Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsatv2_SyN.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
+            Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsat_SyN.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
             Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/COMMIT2/dict/Results_StickZeppelinBall_COMMIT2/compartment_IC.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
             Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_model-DTI_map-FA.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_FA_MNI152_1mm_splenium.nii.gz"
         done
@@ -123,7 +123,7 @@ MySD_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tract
 
 if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimeslength ]]; then Info "Prepping MySD inputs"
 
-    MTsat_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-MTsatv2_SyN.nii.gz
+    MTsat_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-MTsat_SyN.nii.gz
     MySD=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/MySD.py
     weights_MySD=${proc_dwi}/MySD/Results_VolumeFractions/streamline_weights.txt
 
@@ -177,6 +177,11 @@ if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimes
     Do_cmd tckstats $MySD_tck -dump $MySD_length -force
     # Getting streamline myelin volume
     matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); MySD_weighttimeslength = weight_times_length('$MySD_weights','$MySD_length'); save('$MySD_weighttimeslength', 'MySD_weighttimeslength', '-ASCII'); exit"
+
+    if [ "$nocleanup" == "FALSE" ]; then
+        # Cleaning up tmp files
+        rm -r ${proc_dwi}/MySD/dict*
+    fi
 
     else Info "MySD weights were already multiplied by length or this option was not selected"; 
 fi
@@ -253,6 +258,11 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_weighttimeslength ]]; then Info
     Do_cmd tckstats $COMMIT_tck -dump $COMMIT_length -force
     # Getting streamline myelin volume
     matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT_weighttimeslength = weight_times_length('$COMMIT_weights','$COMMIT_length'); save('$COMMIT_weighttimeslength', 'COMMIT_weighttimeslength', '-ASCII'); exit"
+
+    if [ "$nocleanup" == "FALSE" ]; then
+        # Cleaning up tmp files
+        rm -r ${proc_dwi}/COMMIT/dict/dict*
+    fi
 
     else Info "COMMIT weights were already multiplied by length"; 
 fi

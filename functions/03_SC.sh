@@ -27,9 +27,10 @@ autoTract=$9
 keep_tck=${10}
 dwi_str=${11}
 filter=${12}
-tractometry=${13} 
-tractometry_input=${14}
-PROC=${15}
+reg_lambda=${13}
+tractometry=${14} 
+tractometry_input=${15}
+PROC=${16}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -92,6 +93,7 @@ if [ ! -f "$dwi_mask" ]; then Error "Subject $id doesn't have DWI binary mask:\n
 if [ ! -f "$dti_FA" ]; then Error "Subject $id doesn't have a FA:\n\t\tRUN -proc_dwi"; exit; fi
 if [ ! -f "$dwi_SyN_affine" ]; then Warning "Subject $id doesn't have an SyN registration, only AFFINE will be apply"; regAffine="TRUE"; else regAffine="FALSE"; fi
 if [[ $filter != "both" && $filter != "SIFT2" && $filter != "COMMIT2" ]]; then Error "-filter argument does not exist"; exit; fi
+if [[ "$filter" == "COMMIT2" ]] || [[ "$filter" == "both" ]] && [[ "$reg_lambda" == "FALSE" ]]; then Error "Subject $id is filtering using COMMIT2 but doesn't have a lambda:\n\t\tRUN -SC with -reg_lambda"; exit; fi
 
 # -----------------------------------------------------------------------------------------------
 # Check IF output exits and WARNING
@@ -115,7 +117,8 @@ Nparc=0
 
 # Create script specific temp directory
 #tmp="${tmpDir}/${RANDOM}_micapipe_post-dwi_${id}"
-tmp=${tmpDir}/03_SC/${subject}/${SES}
+#tmp=${tmpDir}/03_SC/${subject}/${SES}
+tmp=/data/tardiflab2/wenda/03_SC/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
@@ -192,12 +195,14 @@ fi
 # -----------------------------------------------------------------------------------------------
 # Filtering
 weights_sift2=${tmp}/SIFT2_${tracts}.txt
-weights_commit2="${proc_dwi}/COMMIT2/dict/Results_StickZeppelinBall_COMMIT2/streamline_weights.txt"
 
 if [[ "$filter" == "SIFT2" ]] || [[ "$filter" == "both" ]] && [[ ! -f "$weights_sift2" ]]; then
     #SIFT2
     Do_cmd tcksift2 -nthreads "$threads" "$tck" "$fod_wmN" "$weights_sift2"
-elif [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_commit2" ]]; then
+fi
+
+weights_commit2="${proc_dwi}/COMMIT2/dict/Results_StickZeppelinBall_COMMIT2/streamline_weights.txt"
+if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_commit2" ]]; then
     #COMMIT2
     COMMIT2_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered.tck"
     COMMIT2_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_length.txt"
@@ -244,7 +249,7 @@ elif [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_
 
         while [[ ! -f $weights_commit2  ]] ; do #Sometimes run into an error with COMMIT outputs, reruning it seems to fix it
         Info "Running COMMIT2"
-        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT2 ${idBIDS} $proc_dwi $tmp 8e-1 #empirically determined to have a matrix density of 35% using the aparc parcellation (2e-1 for deterministic at 3M) (8e-1 for probabilistic at 3M)
+        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT2 ${idBIDS} $proc_dwi $tmp $reg_lambda #empirically determined to have a matrix density of 35% using the DK parcellation (2e-1 for deterministic at 3M, 8e-1 for probabilistic at 3M for MWC dataset)
         # Remove any streamlines whose weights are too low
         Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit2 -tck_weights_out $COMMIT2_weights $tmp/DWI_tractogram_connecting.tck $COMMIT2_tck -force     
         # Testing if COMMIT2 ran into any issues
@@ -261,8 +266,13 @@ elif [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_
         # Get track volume
         matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT2_weighttimeslength = weight_times_length('$COMMIT2_weights','$COMMIT2_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2filtered_volume.txt', 'COMMIT2_weighttimeslength', '-ASCII'); exit"
     fi
-fi
 
+    if [ "$nocleanup" == "FALSE" ]; then
+        # Here to cleanup some files
+        rm -r ${proc_dwi}/COMMIT2/dict/dict*
+    fi
+
+fi
 
 #Setting up weights and filter for the connectomes
 if [ "$filter" == "both" ]; then
