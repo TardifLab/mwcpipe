@@ -117,8 +117,7 @@ Nparc=0
 
 # Create script specific temp directory
 #tmp="${tmpDir}/${RANDOM}_micapipe_post-dwi_${id}"
-#tmp=${tmpDir}/03_SC/${subject}/${SES}
-tmp=/data/tardiflab2/wenda/03_SC/${subject}/${SES}
+tmp=${tmpDir}/03_SC/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
@@ -225,7 +224,7 @@ if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_co
         Info "Getting DK85 parcellation for COMMIT2"
         # Converting aparc+aseg parcellation  
         Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
-        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz /data_/tardiflab/01_programs/freesurfer_v7/FreeSurferColorLUT.txt /data_/tardiflab/01_programs/mrtrix3/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
+        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
         # Getting necessary files for labelsgmfix
         Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
         Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
@@ -233,7 +232,7 @@ if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_co
         Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
         # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
         SGE_ROOT= 
-        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz /data_/tardiflab/01_programs/mrtrix3/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
+        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
         # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
         SGE_ROOT=/opt/sge
         # Move parcel from T1 space to diffusion space
@@ -408,8 +407,10 @@ if [[ ${tractometry}  == "TRUE" ]]; then
         if [[ ! -f "$weights_image" ]]; then
             Info "Non-linear registration and sampling of ${image_str}"
             Do_cmd antsBrainExtraction.sh -d 3 -a $image -e "$util_MNIvolumes/MNI152_T1_1mm_brain.nii.gz" -m $MNI152_mask -o "${tmp}/${idBIDS}_${image_str}_"
+            #Do_cmd bet $image $image_brain -f 0.35
             Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$image_brain" -o "$str_image_syn" -t s -n "$threads" -p d
             Do_cmd antsApplyTransforms -d 3 -i "$image" -r "$dwi_b0" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_image_warp" -t "$t1_image_affine" -o "$image_in_dwi" -v --float
+
             #Sampling image
             Do_cmd tcksample $tck $image_in_dwi $weights_image -stat_tck median -force
         else

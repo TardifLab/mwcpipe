@@ -107,6 +107,7 @@ if [[ ${MySD}  == "TRUE" || ${gratio}  == "TRUE" ]] && [[ ! -f "$alpha" ]]; then
         Do_cmd rm -r ${tmpDir}/MVF_calc
     else
         until [ -f $alpha ]; do Info "Alpha computation for MTsat to MVF scaling is already in progress, waiting 10 min for it to finish"; sleep 10m; done
+
     fi
 else
     Info "Alpha has already been calculated for MTsat to MVF scaling"
@@ -149,7 +150,7 @@ if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimes
     Info "Getting DK85 parcellation"
     # Converting aparc+aseg parcellation  
     Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
-    Do_cmd labelconvert $tmp/aparc+aseg.nii.gz /data_/tardiflab/01_programs/freesurfer_v7/FreeSurferColorLUT.txt /data_/tardiflab/01_programs/mrtrix3/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
+    Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
     # Getting necessary files for labelsgmfix
     Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
     Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
@@ -157,7 +158,7 @@ if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimes
     Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
     # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
     SGE_ROOT= 
-    Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz /data_/tardiflab/01_programs/mrtrix3/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
+    Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
     # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
     SGE_ROOT=/opt/sge
     # Move parcel from T1 space to diffusion space
@@ -229,7 +230,7 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_weighttimeslength ]]; then Info
     if [[ ! -f $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ]]; then Info "Getting DK85 parcellation"
         # Converting aparc+aseg parcellation  
         Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
-        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz /data_/tardiflab/01_programs/freesurfer_v7/FreeSurferColorLUT.txt /data_/tardiflab/01_programs/mrtrix3/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
+        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
         # Getting necessary files for labelsgmfix
         Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
         Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
@@ -237,7 +238,7 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_weighttimeslength ]]; then Info
         Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
         # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
         SGE_ROOT= 
-        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz /data_/tardiflab/01_programs/mrtrix3/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
+        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
         # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
         SGE_ROOT=/opt/sge
         # Move parcel from T1 space to diffusion space
