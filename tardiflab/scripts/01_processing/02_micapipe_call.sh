@@ -47,7 +47,6 @@ elif [ "$2" == dwi ] ; then
               	-out $OUT_DIR \
               	-bids $RAW_DIR \
               	-ses $SESSION \
-        		-nocleanup \
                 -dwi_upscale \
               	-proc_dwi
 
@@ -58,9 +57,23 @@ elif [ "$2" == SC ] ; then
               	-out $OUT_DIR \
               	-bids $RAW_DIR \
               	-ses $SESSION \
-		-tracts 5M \
-              	-nocleanup \
+        		-tracts 3M \
+                -filter COMMIT2 \
+                -reg_lambda 15e-1 \
+              	-tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii"  \
               	-SC
+
+elif [ "$2" == proc_COMMIT ] ; then
+      # tract-specific MySD/COMMIT/gratio processing
+        ${MICAPIPE}/micapipe \
+                -sub $1 \
+                -out $OUT_DIR \
+                -bids $RAW_DIR \
+                -ses $SESSION \
+                -MTsat_DWI "${OUT_DIR}/micapipe/sub-${1}/${SESSION}/dwi/sub-${1}_${SESSION}_space-dwi_desc-MTsat_SyN.nii.gz" \
+		        -gratio \
+		        -MVFalpha_list $MVFlist \
+                -proc_COMMIT
 
 elif [ "$2" == FC ] ; then
       # resting state fMRI & FC processing
