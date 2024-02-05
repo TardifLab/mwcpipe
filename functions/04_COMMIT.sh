@@ -280,6 +280,12 @@ dwi_cere="${proc_dwi}/${idBIDS}_space-dwi_atlas-cerebellum.nii.gz"
 dwi_subc="${proc_dwi}/${idBIDS}_space-dwi_atlas-subcortical.nii.gz"
 lut_sc="${util_lut}/lut_subcortical-cerebellum_mics.csv"
 
+dwi_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_"  ## Updated transforms 
+dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
+dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
+dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
+trans_T12dwi="-t ${dwi_SyN_warp} -t ${dwi_SyN_affine}" 
+
 if [[ ${MySD}  == "TRUE" ]] || [[ ${gratio}  == "TRUE" ]]; then
     for seg in "${parcellations[@]}"; do
         parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
@@ -361,6 +367,12 @@ if [[ ${gratio}  == "TRUE" ]]; then
             Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_COMMIT}axonal-volume_node-norm_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
 
     		matlab -nodisplay -r "MVF = dlmread('${connectome_str_MySD}myelin-volume_full-connectome.txt'); AVF = dlmread('${connectome_str_COMMIT}axonal-volume_full-connectome.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${connectome_str_COMMIT}gratio_full-connectome.txt', 'gratio', '-ASCII'); exit"
+
+            Do_cmd tck2connectome -nthreads "$threads" "$COMMIT_tck" "$dwi_all" "${connectome_str_COMMIT}NOS_full-connectome.txt" -assignment_radial_search 2 -symmetric -zero_diagonal -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_COMMIT}NOS_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+
+            Do_cmd tck2connectome -nthreads "$threads" "$COMMIT_tck" "$dwi_all" "${connectome_str_COMMIT}LOS_full-connectome.txt" -assignment_radial_search 2 -symmetric -zero_diagonal -scale_length -stat_edge mean -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_COMMIT}LOS_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
 
         else
               Info "Subject ${id} has tract-specific g-ratio-annotated connectome in $parc_name";
