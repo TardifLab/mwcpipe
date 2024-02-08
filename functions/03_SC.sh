@@ -257,13 +257,13 @@ if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_co
             rm -r "${proc_dwi}/COMMIT2"
         fi
         done
-     
+     exit
         # Compute network density
 	    Do_cmd tck2connectome -nthreads $threads $COMMIT2_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz $proc_dwi/nos_commit2.txt -symmetric -zero_diagonal -quiet -force
         # Get track length
         Do_cmd tckstats $COMMIT2_tck -dump $COMMIT2_length -force
         # Get track volume
-        matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT2_weighttimeslength = weight_times_length('$COMMIT2_weights','$COMMIT2_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2filtered_volume.txt', 'COMMIT2_weighttimeslength', '-ASCII'); exit"
+        matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT2_weighttimeslength = weight_times_length('$COMMIT2_weights','$COMMIT2_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt', 'COMMIT2_weighttimeslength', '-ASCII'); exit"
     fi
 
     if [ "$nocleanup" == "FALSE" ]; then
@@ -406,10 +406,11 @@ if [[ ${tractometry}  == "TRUE" ]]; then
 
         if [[ ! -f "$weights_image" ]]; then
             Info "Non-linear registration and sampling of ${image_str}"
-            Do_cmd antsBrainExtraction.sh -d 3 -a $image -e "$util_MNIvolumes/MNI152_T1_1mm_brain.nii.gz" -m $MNI152_mask -o "${tmp}/${idBIDS}_${image_str}_"
-            #Do_cmd bet $image $image_brain -f 0.35
-            Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$image_brain" -o "$str_image_syn" -t s -n "$threads" -p d
-            Do_cmd antsApplyTransforms -d 3 -i "$image" -r "$dwi_b0" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_image_warp" -t "$t1_image_affine" -o "$image_in_dwi" -v --float
+            #Do_cmd antsBrainExtraction.sh -d 3 -a $image -e "$util_MNIvolumes/MNI152_T1_1mm_brain.nii.gz" -m $MNI152_mask -o "${tmp}/${idBIDS}_${image_str}_"
+            Do_cmd bet $image $image_brain -f 0.35
+            Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$image_brain" -o "$str_image_syn" -t a -n "$threads" -p d
+            #Do_cmd antsApplyTransforms -d 3 -i "$image" -r "$dwi_b0" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_image_warp" -t "$t1_image_affine" -o "$image_in_dwi" -v --float
+            Do_cmd antsApplyTransforms -d 3 -i "$image" -r "$dwi_b0" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_image_affine" -o "$image_in_dwi" -v
 
             #Sampling image
             Do_cmd tcksample $tck $image_in_dwi $weights_image -stat_tck median -force

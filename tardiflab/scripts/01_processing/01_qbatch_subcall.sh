@@ -72,7 +72,7 @@ comment
 
         ID=sub-"${SUB}"
         sub_dir="${log_func_dir}/${ID}_ses-2"
-        if [ ! -d ${sub_dir} ]; then mkdir -qp ${sub_dir} ;  fi
+        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
         cd ${sub_dir}                                                                                           # cd or logs will output in cwd
 
         # Call to desired function
