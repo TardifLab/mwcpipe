@@ -53,9 +53,9 @@
   export mwcdir="${root_dir}/mwc"
   export RAW_DIR="${mwcdir}/bids"                                       		# Where you have raw data stored (NOTE: Must adapt $utilities.sh to match file names)
   export OUT_DIR="${RAW_DIR}/derivatives"   	                          		# Where you want derivatives saved
-  export MICAPIPE="${mwcdir}/mwcpipe" 							# Where you put all tools incl micapipe
-  export scripts="${MICAPIPE}/tardiflab/scripts/01_processing"                          # Location of custom tools that interface with micapipe
-
+  export MICAPIPE="${mwcdir}/mwcpipe" 					                		# Where you put all tools incl micapipe
+  export scripts="${MICAPIPE}/tardiflab/scripts/01_processing"                  # Location of custom tools that interface with micapipe
+  export MVFlist="/data_/tardiflab/wenda/mwc/dummylist"                                                              # Location of subjects that would be used to calibrate g-ratio calculations
 # Virtual environments
   export pyvenv_commit=${softwareDir}/COMMIT_MTR_env 					# Location of virtual environment with dependencies for COMMIT & AMICO
   export pyvenv_micapipe=micapipe_mwc_env                                		# micapipe python venv (conda activate $pyvenv_micapipe)
