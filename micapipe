@@ -136,7 +136,8 @@ echo -e "
 \t\t\033[38;5;120m-MySD\033[0m                : Run MySD and calculate tract-specific myelin volume
 \t\t\033[38;5;120m-gratio\033[0m              : Run MySD and COMMIT, and calculate tract-specific g-ratio
 \t\t\033[38;5;120m-DualMTR\033[0m             : Descriptions
-
+\t\t\033[38;5;120m-tractometry\033[0m         : Option to perform tractometry using the filtered tractogram 
+\t\t\t\t         (If there are multiple images, put all of them in a single argument! e.g., -tractometry 'image1 image2 image3') 
 \t\033[38;5;197m-MPC\033[0m
 \t\t\033[38;5;120m-microstructural_img\033[0m : Path to scan on which MPC will be performed ( ./img.nii.gz )
 \t\t\t\t         If left blank or omitted, defaults to using qT1 identified through BIDS directory structure
@@ -969,7 +970,7 @@ fi
 #   REQUIRES -proc_dwi 
 if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
     log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat_DWI"
+    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat_DWI $tractometry"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Tract-specific processing (COMMIT)"
@@ -977,7 +978,7 @@ if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
         export PROC="qsub-MICA"
         # Info "Setting a warper to run on mica.q"
         qsub -q mica.q -pe smp 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
-             $COMMAND $PROC
+             $COMMAND "$tractometry_input" $PROC
     # all.q - post-DWI processing (tractography)
     elif [[ $qall == "TRUE" ]]; then
         Info "all.q qsub - Tract-specific processing (COMMIT)"
@@ -985,10 +986,10 @@ if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
         export PROC="qsub-all.q"
         # Info "Setting a warper to run on all.q"
         qsub -q all.q -pe all.pe 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
-             $COMMAND $PROC
+             $COMMAND "$tractometry_input" $PROC
     else
         # LOCAL - post-DWI processing (tractography)
-        $COMMAND $PROC 2>&1 | tee -a ${log_file_str}.txt
+        $COMMAND "$tractometry_input" $PROC 2>&1 | tee -a ${log_file_str}.txt
     fi
 fi
 

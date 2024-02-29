@@ -391,9 +391,8 @@ if [ "$keep_tck" == "TRUE" ]; then Do_cmd mv "$tck" "$proc_dwi"; Do_cmd mv "$wei
 if [[ ${tractometry}  == "TRUE" ]]; then
     Info "Performing tractometry"
     for image in $tractometry_input; do
-        image_str="$(basename ${image})"
+        image_str=$(basename "$image" | cut -d. -f1)
         image_str=${image_str/"${idBIDS}_"/}
-        image_str=${image_str%.*}
         image_brain="${tmp}/${idBIDS}_${image_str}_BrainExtractionBrain.nii.gz"
 
         str_image_syn="${dir_warp}/${idBIDS}_${image_str}_to-nativepro_mode-image_desc-SyN_"

@@ -29,7 +29,9 @@ MTsat_in_dwi=${11}
 <<comment
 MTR-dual=TRUE/FALSE or location?
 comment
-PROC=${12}
+tractometry=${12} 
+tractometry_input=${13}
+PROC=${14}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -270,7 +272,7 @@ fi
 
 # -----------------------------------------------------------------------------------------------
 # MTR-DUAL_COMMIT filtering and weighting for tract-specific MTR
-
+# Add tractometry module
 
 
 # -----------------------------------------------------------------------------------------------
@@ -385,6 +387,94 @@ if [[ ${MTR-dual}  == "TRUE" ]]; then
 
 fi
 moretodo
+
+
+# -----------------------------------------------------------------------------------------------
+# Tractometry connectomes generation 
+
+if [[ ${tractometry}  == "TRUE" ]]; then
+
+    # Getting the tck file for tractometry
+    if [ -f $COMMIT_tck  ]; then
+        tractometry_tck=$COMMIT_tck
+        type="COMMIT2-MySD-COMMIT-filtered"
+    elif [ -f $MySD_tck ]; then
+        tractometry_tck=$MySD_tck
+        type="COMMIT2-MySD-filtered"
+    else
+        tractometry_tck=$COMMIT2_tck
+        type="COMMIT2-filtered"
+    fi
+
+    Info "Performing tractometry"
+    for image in $tractometry_input; do
+
+        image_str=$(basename "$image" | cut -d. -f1) #Get only the basename of the file without extension
+        image_str=${image_str/"${idBIDS}_"/}
+        image_brain="${tmp}/${idBIDS}_${image_str}_BrainExtractionBrain.nii.gz"
+
+        str_image_syn="${dir_warp}/${idBIDS}_${image_str}_to-nativepro_mode-image_desc-SyN_"
+        t1_image_warp="${str_image_syn}1Warp.nii.gz"
+        t1_image_Invwarp="${str_image_syn}1InverseWarp.nii.gz"
+        t1_image_affine="${str_image_syn}0GenericAffine.mat"
+
+        image_in_dwi="${proc_dwi}/${idBIDS}_space-dwi_desc-${image_str}_SyN.nii.gz"
+        weights_image="${proc_dwi}/${idBIDS}_space-dwi_desc-${image_str}_${type}-track_weight.csv"
+        echo $image
+        if [[ ! -f "$weights_image" ]]; then
+            Info "Non-linear registration and sampling of ${image_str}"
+            #Do_cmd antsBrainExtraction.sh -d 3 -a $image -e "$util_MNIvolumes/MNI152_T1_1mm_brain.nii.gz" -m $MNI152_mask -o "${tmp}/${idBIDS}_${image_str}_"
+            Do_cmd bet $image $image_brain -f 0.35
+            Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$image_brain" -o "$str_image_syn" -t a -n "$threads" -p d
+            #Do_cmd antsApplyTransforms -d 3 -i "$image" -r "$dwi_b0" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_image_warp" -t "$t1_image_affine" -o "$image_in_dwi" -v --float
+            Do_cmd antsApplyTransforms -d 3 -i "$image" -r "$dwi_b0" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_image_affine" -o "$image_in_dwi" -v
+
+            #Sampling image
+            Do_cmd tcksample $tractometry_tck $image_in_dwi $weights_image -stat_tck median -force
+        else
+              Info "Subject ${id} has already sampled ${image_str}"; ((Nsteps++))
+        fi
+
+        # Build the Connectomes
+        for seg in "${parcellations[@]}"; do
+            parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
+            connectome_str="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}_desc-iFOD2-${tracts}-${type}-tractometry-${image_str}"
+            lut="${util_lut}/lut_${parc_name}_mics.csv"
+            dwi_cortex="${tmp}/${id}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
+
+            if [[ ! -f "${connectome_str}_full-connectome.txt" ]]; then
+                Info "Building $parc_name cortical connectome"
+                # Take parcellation into DWI space
+                Do_cmd antsApplyTransforms -d 3 -e 3 -i "$seg" -r "$dwi_b0" -n GenericLabel "$trans_T12dwi" -o "$dwi_cortex" -v -u int
+                # Remove the medial wall
+                for i in 1000 2000; do Do_cmd fslmaths "$dwi_cortex" -thr "$i" -uthr "$i" -binv -mul "$dwi_cortex" "$dwi_cortex"; done
+                Info "Building $parc_name cortical-subcortical connectome"
+                dwi_cortexSub="${tmp}/${id}_${parc_name}-sub_dwi.nii.gz"
+                Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_subc" -add "$dwi_cortex" "$dwi_cortexSub" -odt int #subcortical parcellation
+                Info "Building $parc_name cortical-subcortical-cerebellum connectome"
+                dwi_all="${tmp}/${id}_${parc_name}-full_dwi.nii.gz"
+                Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int #cerebellar parcellation
+                # Build the Cortical-Subcortical-Cerebellum connectomes
+                Do_cmd tck2connectome -nthreads "$threads" "$tractometry_tck" "$dwi_all" "${connectome_str}_full-connectome.txt" \
+                    -scale_file "$weights_image" -assignment_radial_search 2 -stat_edge mean -symmetric -zero_diagonal -quiet
+                Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str}_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+            else
+                  Info "Subject ${id} has tractometry connectome for $image_str in $parc_name";
+            fi
+
+        done
+        # Change connectome permissions
+        chmod 770 -R "$dwi_cnntm"/* 2>/dev/null
+
+    done
+fi
+
+
+
+
+
+
+
 # -----------------------------------------------------------------------------------------------
 # QC notification of completition
 QC_SC
