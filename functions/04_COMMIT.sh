@@ -26,12 +26,13 @@ MVFalpha_list=$8
 MySD=$9
 gratio=${10}
 MTsat_in_dwi=${11}
-<<comment
-MTR-dual=TRUE/FALSE or location?
-comment
-tractometry=${12} 
-tractometry_input=${13}
-PROC=${14}
+Dual_MTON=${12}
+Dual_MTOFF=${13}
+Dual_bvals=${14}
+Dual_bvecs=${15}
+tractometry=${16} 
+tractometry_input=${17}
+PROC=${18}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -68,19 +69,12 @@ aloita=$(date +%s)
 Nparc=0
 
 # Create script specific temp directory
+tmpDir=/data/tardiflab2/wenda/tmp
 tmp=${tmpDir}/04_COMMIT/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
 trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
-
-# -----------------------------------------------------------------------------------------------
-
-
-<<to_do
-for micapipe - need to add the MTsat image, or find it
-run MTR
-to_do
 
 # -----------------------------------------------------------------------------------------------
 # Computing alpha for MVF
@@ -102,7 +96,7 @@ if [[ ${MySD}  == "TRUE" || ${gratio}  == "TRUE" ]] && [[ ! -f "$alpha" ]]; then
                    -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
                    -o "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz"
             Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsat_SyN.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
-            Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/COMMIT2/dict/Results_StickZeppelinBall_COMMIT2/compartment_IC.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
+            Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/COMMIT2/dict/Results_StickZeppelinBall_COMMIT1/compartment_IC.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
             Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_model-DTI_map-FA.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_FA_MNI152_1mm_splenium.nii.gz"
         done
         matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alpha('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_COMMIT/alpha.txt', 'alpha', '-ASCII'); exit"
@@ -272,8 +266,207 @@ fi
 
 # -----------------------------------------------------------------------------------------------
 # MTR-DUAL_COMMIT filtering and weighting for tract-specific MTR
-# Add tractometry module
 
+if [[ -f $Dual_MTON ]] && [[ -f $Dual_MTOFF ]]; then
+    dual=TRUE
+else
+    dual=FALSE
+fi
+
+DUAL_tck="${proc_dwi}/${idBIDS}_space-dual_desc-iFOD2-${tracts}_tractography_COMMIT2-DUAL-filtered.tck"
+DUAL_length="${proc_dwi}/${idBIDS}_space-dual_desc-iFOD2-${tracts}_tractography_COMMIT2-DUAL-filtered_length.txt"
+DUALon_weights="${proc_dwi}/${idBIDS}_space-dual_desc-iFOD2-${tracts}_tractography_COMMIT2-DUAL-filtered_MTon-weights.txt"
+DUALon_weighttimeslength="$proc_dwi/${idBIDS}_space-dual_desc-iFOD2-${tracts}_tractography_COMMIT2-DUAL-filtered_MTon-volume.txt"
+DUALoff_weights="${proc_dwi}/${idBIDS}_space-dual_desc-iFOD2-${tracts}_tractography_COMMIT2-DUAL-filtered_MToff-weights.txt"
+DUALoff_weighttimeslength="$proc_dwi/${idBIDS}_space-dual_desc-iFOD2-${tracts}_tractography_COMMIT2-DUAL-filtered_MToff-volume.txt"
+mtr_b0_in_dual=${proc_dwi}/${idBIDS}_space-dual_desc-mtrb0.nii.gz
+mtr_b1500_in_dual=${proc_dwi}/${idBIDS}_space-dual_desc-mtrb1500.nii.gz
+dual_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dual_mode-image_desc-SyN_"
+dual_SyN_warp="${dual_SyN_str}1Warp.nii.gz"
+dual_SyN_Invwarp="${dual_SyN_str}1InverseWarp.nii.gz"
+dual_SyN_affine="${dual_SyN_str}0GenericAffine.mat"
+
+if [[ ${dual}  == "TRUE" ]] && [[ ! -f $DUAL_tck ]]; then Info "Prepping COMMIT Dual-MTR inputs"
+
+        Info "Upsampling dual-encoding images"
+        Do_cmd fslmaths $Dual_MTON -nan $tmp/mton.nii.gz
+      	Do_cmd mrgrid $tmp/mton.nii.gz regrid -voxel $res $tmp/mton_upscaled.nii.gz
+        Do_cmd fslmaths $Dual_MTOFF -nan $tmp/mtoff.nii.gz
+        Do_cmd mrgrid $tmp/mtoff.nii.gz regrid -voxel $res $tmp/mtoff_upscaled.nii.gz
+
+        Info "Getting mton/mtoff B0 images"
+        Do_cmd mrconvert -coord 3 0:0 $tmp/mton_upscaled.nii.gz $tmp/mton_b0.nii.gz
+        Do_cmd mrconvert -coord 3 0:0 $tmp/mtoff_upscaled.nii.gz $tmp/mtoff_b0.nii.gz
+        Do_cmd mrcalc $tmp/mtoff_b0.nii.gz $tmp/mton_b0.nii.gz -subtract $tmp/mtr_tmp_b0.nii.gz
+        Do_cmd mrcalc $tmp/mtr_tmp_b0.nii.gz $tmp/mtoff_b0.nii.gz -divide $mtr_b0_in_dual
+        
+        Info "Getting mton/mtoff B1500 images"
+        Do_cmd mrconvert -coord 3 1:30 $tmp/mton_upscaled.nii.gz $tmp/mton_b1500_all.nii.gz 
+        Do_cmd mrmath $tmp/mton_b1500_all.nii.gz mean $tmp/mton_b1500.nii.gz -axis 3
+        Do_cmd mrconvert -coord 3 1:30 $tmp/mtoff_upscaled.nii.gz $tmp/mtoff_b1500_all.nii.gz 
+        Do_cmd mrmath $tmp/mtoff_b1500_all.nii.gz mean $tmp/mtoff_b1500.nii.gz -axis 3
+        Do_cmd mrcalc $tmp/mtoff_b1500.nii.gz $tmp/mton_b1500.nii.gz -subtract $tmp/mtr_tmp_b1500.nii.gz
+        Do_cmd mrcalc $tmp/mtr_tmp_b1500.nii.gz $tmp/mtoff_b1500.nii.gz -divide $mtr_b1500_in_dual
+
+        regScript=/data_/tardiflab/mwc/mwcpipe/tardiflab/scripts/01_processing/t1w_dwi_registration_SyN.sh
+        log_syn="${tmp}/${idBIDS}_log_T1w_DWI_SyN.txt"
+
+        Info "Registrations"
+        Do_cmd bet $tmp/mtoff_b0.nii.gz $tmp/dual_brain.nii.gz -m
+        Do_cmd maskfilter $tmp/dual_brain_mask.nii.gz erode -npass 2 $tmp/dual_brain_mask_erode.nii.gz -force
+        Do_cmd mrcalc $mtr_b0_in_dual $tmp/dual_brain_mask_erode.nii.gz -mul $tmp/mtr_brain.nii.gz
+        Do_cmd mrcalc 4000 $tmp/mtoff_b0.nii.gz $tmp/mton_b1500.nii.gz -add $tmp/mton_b0.nii.gz -add -sub 4000 -div 3 -pow 1000 -mul $tmp/dual_brain_mask_erode.nii.gz -mul $tmp/synth_t1.nii.gz -force
+        "$regScript" "$T1nativepro_brain" "$tmp/mtr_brain.nii.gz" "$tmp/synth_t1.nii.gz" "$dual_SyN_str" "$log_syn"
+
+
+        wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
+        wm_mask_dual=${tmp}/${idBIDS}_dual_wm_mask.nii.gz
+        confidence_map=${tmp}/confidencemap.nii.gz
+
+     	Info "Getting the white matter mask"
+     	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $T15ttgen $wm_mask -force   
+        Do_cmd antsApplyTransforms -d 3 -r $tmp/synth_t1.nii.gz -i $wm_mask -t $dual_SyN_warp -t $dual_SyN_affine -o $wm_mask_dual -v
+
+        Info "Getting Confidence Map for COMMIT dual encoding"
+        Do_cmd fslmaths $tmp/mtoff_upscaled.nii.gz -sub $tmp/mton_upscaled.nii.gz -mul $wm_mask_dual $tmp/tmp.nii.gz
+        Do_cmd fslmaths $tmp/tmp.nii.gz -thr 0 -bin $tmp/tmp_bin_pos.nii.gz
+        Do_cmd fslmaths $tmp/tmp.nii.gz -uthr 0 -abs -bin -mul -5 $tmp/tmp_bin_neg.nii.gz
+        Do_cmd fslmaths $tmp/tmp_bin_pos.nii.gz -add $tmp/tmp_bin_neg.nii.gz -Tmean $tmp/tmp_bin_avg.nii.gz
+        Do_cmd fslmaths $tmp/tmp_bin_avg.nii.gz -thr 0 $confidence_map
+
+        dwi_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_"
+        dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
+        dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
+        dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
+        COMMIT2_DUAL_tck="${proc_dwi}/${idBIDS}_space-dual_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered.tck"
+
+        Info "Transforming tck to dual space"
+        Do_cmd warpinit $confidence_map $tmp/identity_wrap[].nii -force
+        for i in {0..2}; do
+            Do_cmd antsApplyTransforms -d 3 -e 0 -i $tmp/identity_wrap${i}.nii -o $tmp/inv_mrtrix_warp${i}.nii -r $confidence_map -t $dwi_SyN_warp -t $dwi_SyN_affine -t [$dual_SyN_affine,1] -t $dual_SyN_Invwarp --default-value 2147483647 -v
+        done
+        Do_cmd warpcorrect $tmp/inv_mrtrix_warp[].nii $tmp/inv_mrtrix_warp_corrected.mif -marker 2147483647 -force
+        Do_cmd tcktransform $COMMIT2_tck $tmp/inv_mrtrix_warp_corrected.mif $COMMIT2_DUAL_tck -force
+
+
+        COMMIT_DUAL=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT_dual.py
+        weights_dualon=${proc_dwi}/DUALon/Results_StickZeppelinBall/streamline_weights.txt
+        weights_dualoff=${proc_dwi}/DUALoff/Results_StickZeppelinBall/streamline_weights.txt
+        
+        weights_dualon_filtered1=${tmp}/commiton_weight.txt
+        weights_dualoff_filtered1=${tmp}/commitoff_weight.txt
+
+        while [[ ! -f $weights_dualon  ]] || [[ ! -f $weights_dualoff  ]] ; do
+
+        if [[ ! -f $weights_dualon  ]]; then
+            Info "Running COMMIT for MTon"
+            /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT_DUAL $idBIDS $proc_dwi $tmp $COMMIT2_DUAL_tck $tmp/mton_upscaled.nii.gz $Dual_bvals $Dual_bvecs ${proc_dwi}/DUALon
+        fi 
+        if [[ ! -f $weights_dualoff  ]]; then
+            Info "Running COMMIT for MToff"
+            /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT_DUAL $idBIDS $proc_dwi $tmp $COMMIT2_DUAL_tck $tmp/mtoff_upscaled.nii.gz $Dual_bvals $Dual_bvecs ${proc_dwi}/DUALoff
+        fi  
+        # Removing invalid steamlines for Dual-MTon-DWI
+        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_dualon $COMMIT2_DUAL_tck $DUAL_tck -force
+        # Rerunning COMMIT is necessary
+        tmptckcount=$(tckinfo $COMMIT2_DUAL_tck -count)
+        if [[ "${tmptckcount##* }" -eq 0 ]]; then 
+            rm -r "${proc_sc}/DUALon"
+        fi
+        #Removing invalid streamlines for Dual-MToff-DWI
+        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_dualoff $COMMIT2_DUAL_tck $DUAL_tck -force
+        # Rerunning COMMIT is necessary
+        tmptckcount=$(tckinfo $COMMIT2_DUAL_tck -count)
+        if [[ "${tmptckcount##* }" -eq 0 ]]; then
+            rm -r "${proc_sc}/DUALoff"
+        fi
+        done
+
+        # Removing streamlines that does not exit in both 
+        matlab -nodisplay -r "cd('${proc_dwi}'); commitoff = dlmread('DUALoff/Results_StickZeppelinBall/streamline_weights.txt'); commiton = dlmread('DUALon/Results_StickZeppelinBall/streamline_weights.txt'); unusable = (commitoff <= 0.000000000001) | (commiton <= 0.000000000001); commitoff(unusable) = 0; commiton(unusable) = 0; save('${tmp}/commitoff_weight.txt', 'commitoff', '-ASCII'); save('${tmp}/commiton_weight.txt', 'commiton', '-ASCII'); exit"
+
+        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_dualon_filtered1 -tck_weights_out $DUALon_weights $COMMIT2_tck $DUAL_tck -force
+        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_dualoff_filtered1 -tck_weights_out $DUALoff_weights $COMMIT2_tck $DUAL_tck -force
+
+        Do_cmd tckstats $DUAL_tck -dump $DUAL_length -force  
+     
+        matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('/data_/tardiflab/wenda/programs/COMMIT')); COMMIT_weightoverlength = weight_times_length('$DUALon_weights','$DUAL_length'); save('$DUALon_weighttimeslength', 'COMMIT_weightoverlength', '-ASCII'); exit"
+        matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('/data_/tardiflab/wenda/programs/COMMIT')); COMMIT_weightoverlength = weight_times_length('$DUALoff_weights','$DUAL_length'); save('$DUALoff_weighttimeslength', 'COMMIT_weightoverlength', '-ASCII'); exit"
+
+
+    if [ "$nocleanup" == "FALSE" ]; then
+        # Cleaning up tmp files
+        rm -r ${proc_dwi}/DUALon/dict*
+        rm -r ${proc_dwi}/DUALoff/dict*
+    fi
+
+fi
+
+
+# Connectomes generation 
+parcellations=($(find "${dir_volum}" -name "*.nii.gz" ! -name "*cerebellum*" ! -name "*subcortical*"))
+lut_sc="${util_lut}/lut_subcortical-cerebellum_mics.csv"
+
+if [[ ${dual}  == "TRUE" ]]; then
+
+    dual_cere="${tmp}/${idBIDS}_space-dual_atlas-cerebellum.nii.gz"
+    dual_subc="${tmp}/${idBIDS}_space-dual_atlas-subcortical.nii.gz"
+    T1str_nat="${idBIDS}_space-nativepro_t1w_atlas"
+    T1_seg_cerebellum="${dir_volum}/${T1str_nat}-cerebellum.nii.gz"
+    T1_seg_subcortex="${dir_volum}/${T1str_nat}-subcortical.nii.gz"
+
+    Do_cmd antsApplyTransforms -d 3 -e 3 -i "$T1_seg_cerebellum" -r "$mtr_b0_in_dual" -n GenericLabel -t $dual_SyN_warp -t $dual_SyN_affine -o "$dual_cere" -v -u int
+    Do_cmd fslmaths "$dual_cere" -bin -mul 100 -add "$dual_cere" "$dual_cere"
+    Do_cmd antsApplyTransforms -d 3 -e 3 -i "$T1_seg_subcortex" -r "$mtr_b0_in_dual" -n GenericLabel -t $dual_SyN_warp -t $dual_SyN_affine -o "$dual_subc" -v -u int
+    Do_cmd fslmaths "$dual_subc" -thr 16 -uthr 16 -binv -mul "$dual_subc" "$dual_subc"
+
+    weights_MTRB0="${tmp}/${idBIDS}_space-dual_desc-MTRB0-track_weight.csv"
+    Do_cmd tcksample $DUAL_tck $mtr_b0_in_dual $weights_MTRB0 -stat_tck median -force
+    weights_MTRB1500="${tmp}/${idBIDS}_space-dual_desc-MTRB1500-track_weight.csv"
+    Do_cmd tcksample $DUAL_tck $mtr_b0_in_dual $weights_MTRB1500 -stat_tck median -force
+
+    for seg in "${parcellations[@]}"; do
+        parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
+        connectome_str_DUAL="${dwi_cnntm}/${idBIDS}_space-dual_atlas-${parc_name}_desc-iFOD2-${tracts}-COMMIT2-DUAL-filtered-"
+        lut="${util_lut}/lut_${parc_name}_mics.csv"
+        dual_cortex="${tmp}/${id}_${parc_name}-cor_dual.nii.gz" # Segmentation in dual space
+
+        if [[ ! -f "${connectome_str_DUAL}MTR_full-connectome.txt" ]]; then
+
+            dual_all="${tmp}/${id}_${parc_name}-full_dual.nii.gz"
+            if [[ ! -f $dual_all ]]; then Info "Building $parc_name cortical connectome"
+                # Take parcellation into DUAL space
+                Do_cmd antsApplyTransforms -d 3 -e 3 -i "$seg" -r "$mtr_b0_in_dual" -n GenericLabel -t $dual_SyN_warp -t $dual_SyN_affine -o "$dual_cortex" -v -u int
+                # Remove the medial wall
+                for i in 1000 2000; do Do_cmd fslmaths "$dual_cortex" -thr "$i" -uthr "$i" -binv -mul "$dual_cortex" "$dual_cortex"; done
+                Info "Building $parc_name cortical-subcortical connectome"
+                dual_cortexSub="${tmp}/${id}_${parc_name}-sub_dual.nii.gz"
+                Do_cmd fslmaths "$dual_cortex" -binv -mul "$dual_subc" -add "$dual_cortex" "$dual_cortexSub" -odt int #subcortical parcellation
+                Info "Building $parc_name cortical-subcortical-cerebellum connectome"
+                Do_cmd fslmaths "$dual_cortex" -binv -mul "$dual_cere" -add "$dual_cortexSub" "$dual_all" -odt int #cerebellar parcellation
+            fi
+
+            # Build the Cortical-Subcortical-Cerebellum connectomes
+            Do_cmd tck2connectome -nthreads "$threads" "$DUAL_tck" "$dual_all" "${connectome_str_DUAL}MTon-volume_full-connectome.txt" -tck_weights_in "$DUALon_weighttimeslength" -assignment_radial_search 2 -symmetric -zero_diagonal -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_DUAL}MTon-volume_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+
+            Do_cmd tck2connectome -nthreads "$threads" "$DUAL_tck" "$dual_all" "${connectome_str_DUAL}MToff-volume_full-connectome.txt" -tck_weights_in "$DUALoff_weighttimeslength" -assignment_radial_search 2 -symmetric -zero_diagonal -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_DUAL}MToff-volume_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+
+            matlab -nodisplay -r "cd('${dwi_cnntm}');COMMIT_on = dlmread('${connectome_str_DUAL}MTon-volume_full-connectome.txt'); COMMIT_off = dlmread('${connectome_str_DUAL}MToff-volume_full-connectome.txt'); COMMIT_MTR = 1-(COMMIT_on./COMMIT_off); COMMIT_MTR(isnan(COMMIT_MTR)) = 0; COMMIT_MTR(COMMIT_MTR < 0) = 0; save('${connectome_str_DUAL}MTR_full-connectome.txt', 'COMMIT_MTR', '-ASCII'); exit"
+
+            Do_cmd tck2connectome -nthreads "$threads" "$DUAL_tck" "$dual_all" "${connectome_str_DUAL}MTRB0-Tractometry_full-connectome.txt" -scale_file "$weights_MTRB0" -assignment_radial_search 2 -stat_edge mean -symmetric -zero_diagonal -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_DUAL}MTRB0-Tractometry_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+
+            Do_cmd tck2connectome -nthreads "$threads" "$DUAL_tck" "$dual_all" "${connectome_str_DUAL}MTRB1500-Tractometry_full-connectome.txt" -scale_file "$weights_MTRB1500" -assignment_radial_search 2 -stat_edge mean -symmetric -zero_diagonal -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_DUAL}MTRB1500-Tractometry_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+
+        else
+              Info "Subject ${id} has Dual-encoded MTR connectome in $parc_name";
+        fi
+    done
+else Info "MTR annotated connectomes have already generated"; 
+fi
 
 # -----------------------------------------------------------------------------------------------
 # Connectomes generation 
@@ -330,6 +523,7 @@ if [[ ${MySD}  == "TRUE" ]] || [[ ${gratio}  == "TRUE" ]]; then
 else Info "MySD annotated connectomes have already generated"; 
 fi
 
+
 if [[ ${gratio}  == "TRUE" ]]; then
 
     for seg in "${parcellations[@]}"; do
@@ -338,6 +532,19 @@ if [[ ${gratio}  == "TRUE" ]]; then
         connectome_str_MySD="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}_desc-iFOD2-${tracts}-COMMIT2-MySD-filtered-"
         lut="${util_lut}/lut_${parc_name}_mics.csv"
         dwi_cortex="${tmp}/${id}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
+
+            dwi_all="${tmp}/${id}_${parc_name}-full_dwi.nii.gz"
+            if [[ ! -f $dwi_all ]]; then Info "Building $parc_name cortical connectome"
+                # Take parcellation into DWI space
+                Do_cmd antsApplyTransforms -d 3 -e 3 -i "$seg" -r "$dwi_b0" -n GenericLabel "$trans_T12dwi" -o "$dwi_cortex" -v -u int
+                # Remove the medial wall
+                for i in 1000 2000; do Do_cmd fslmaths "$dwi_cortex" -thr "$i" -uthr "$i" -binv -mul "$dwi_cortex" "$dwi_cortex"; done
+                Info "Building $parc_name cortical-subcortical connectome"
+                dwi_cortexSub="${tmp}/${id}_${parc_name}-sub_dwi.nii.gz"
+                Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_subc" -add "$dwi_cortex" "$dwi_cortexSub" -odt int #subcortical parcellation
+                Info "Building $parc_name cortical-subcortical-cerebellum connectome"
+                Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int #cerebellar parcellation
+            fi
 
         if [[ ! -f "${connectome_str_COMMIT}axonal-cross-sectional-area_full-connectome.txt" ]] || [[ ! -f "${connectome_str_COMMIT}axonal-volume_full-connectome.txt" ]] || [[ ! -f "${connectome_str_COMMIT}gratio_full-connectome.txt" ]]; then
 
@@ -381,13 +588,6 @@ if [[ ${gratio}  == "TRUE" ]]; then
         fi
     done
 fi
-
-<<moretodo
-if [[ ${MTR-dual}  == "TRUE" ]]; then
-
-fi
-moretodo
-
 
 # -----------------------------------------------------------------------------------------------
 # Tractometry connectomes generation 
@@ -468,12 +668,6 @@ if [[ ${tractometry}  == "TRUE" ]]; then
 
     done
 fi
-
-
-
-
-
-
 
 # -----------------------------------------------------------------------------------------------
 # QC notification of completition

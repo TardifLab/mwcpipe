@@ -51,6 +51,7 @@ echo -e "
 \t\033[38;5;197m-proc_structural\033[0m
 \t\t\033[38;5;120m-t1wStr\033[0m              : String to manually identify the main scan(s) for structural processing. separated by a comma, no blank spaces.
 \t\t\t\t        eg. '-t1wStr run-01_T1w,run-02_T1w'. By default the pipeline uses the string 'T1w.nii'.
+\t\t\033[38;5;120m-mask\033[0m                : Specify the brain mask tool to be used. If unspecified, default is BET. Currently, only specifiable alternative is Synthstrip.
 
 \t\033[38;5;197m-proc_freesurfer\033[0m
 \t\t\033[38;5;120m-t1wStr\033[0m              : String to manually identify the main scan(s) for structural processing. separated by a comma, no blank spaces.
@@ -135,7 +136,10 @@ echo -e "
 \t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (BIDS format) that will be used to calibrate the alpha factor for MVF calculation
 \t\t\033[38;5;120m-MySD\033[0m                : Run MySD and calculate tract-specific myelin volume
 \t\t\033[38;5;120m-gratio\033[0m              : Run MySD and COMMIT, and calculate tract-specific g-ratio
-\t\t\033[38;5;120m-DualMTR\033[0m             : Descriptions
+\t\t\033[38;5;120m-Dual_MTOn\033[0m           : Dual encoded MTon-DWI image - will run DUAL-COMMIT if all the other Dual options have inputs
+\t\t\033[38;5;120m-Dual_MTOFF\033[0m          : Dual encoded MToff-DWI image
+\t\t\033[38;5;120m-Dual_bvals\033[0m          : Dual encoded MT-DWI b-values
+\t\t\033[38;5;120m-Dual_bvecs\033[0m          : Dual encoded MT-DWI b-vectors
 \t\t\033[38;5;120m-tractometry\033[0m         : Option to perform tractometry using the filtered tractogram 
 \t\t\t\t         (If there are multiple images, put all of them in a single argument! e.g., -tractometry 'image1 image2 image3') 
 \t\033[38;5;197m-MPC\033[0m
@@ -228,6 +232,10 @@ do
   -proc_structural)
     procVOL=TRUE
     shift
+  ;;
+  -m|-mask)
+    mask=$2
+    shift;shift
   ;;
   -proc_freesurfer)
     procFS=TRUE
@@ -386,6 +394,22 @@ do
   -MTsat_DWI)
     MTsat_DWI=TRUE
     MTsat_DWI_input=$2
+    shift;shift
+  ;;
+  -Dual_MTON)
+    Dual_MTON=$2
+    shift;shift
+  ;;
+  -Dual_MTOFF)
+    Dual_MTOFF=$2
+    shift;shift
+  ;;
+  -Dual_bvals)
+    Dual_bvals=$2
+    shift;shift
+  ;;
+  -Dual_bvecs)
+    Dual_bvecs=$2
     shift;shift
   ;;
   -MPC)
@@ -589,6 +613,12 @@ if [ -z ${filter} ]; then filter="SIFT2"; else filter=$filter_input; fi
 if [ -z ${MVFalpha_list} ]; then MVFalpha_list=FALSE; else MVFalpha_list=$MVFalpha_list_input; fi
 if [ -z ${MySD} ]; then MySD=FALSE; else MySD=TRUE; fi
 if [ -z ${gratio} ]; then gratio=FALSE; else gratio=TRUE; fi
+if [ -z ${Dual_MTON} ] && [ -z ${Dual_MTOFF} ]; then 
+    Dual_MTON=FALSE
+    Dual_MTOFF=FALSE
+fi
+if [ -z ${Dual_bvals} ]; then Dual_bvals=FALSE; else Dual_bvals=$Dual_bvals; fi
+if [ -z ${Dual_bvecs} ]; then Dual_bvecs=FALSE; else Dual_bvecs=$Dual_bvecs; fi
 if [ -z ${MTsat_DWI} ]; then MTsat_DWI=FALSE; else MTsat_DWI=$MTsat_DWI_input; fi
 
 # Optional arguments proc_dwi
@@ -735,7 +765,7 @@ fi
 # -----------------------------------------------------------------------------------------------#
 if [ "$ALL" = "TRUE" ] || [ "$procVOL" = "TRUE" ]; then
     log_file_str=$dir_logs/proc_structural_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/01_proc-struc_volumetric.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $t1wStr"
+    COMMAND="${scriptDir}/01_proc-struc_volumetric.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $t1wStr $mask"
     # mica.q - Structural processing: Volumetric
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Structural processing: Volumetric"
@@ -970,7 +1000,7 @@ fi
 #   REQUIRES -proc_dwi 
 if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
     log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat_DWI $tractometry"
+    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat_DWI $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Tract-specific processing (COMMIT)"

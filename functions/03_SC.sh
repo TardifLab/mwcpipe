@@ -200,15 +200,15 @@ if [[ "$filter" == "SIFT2" ]] || [[ "$filter" == "both" ]] && [[ ! -f "$weights_
     Do_cmd tcksift2 -nthreads "$threads" "$tck" "$fod_wmN" "$weights_sift2"
 fi
 
+#COMMIT2
+COMMIT2_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered.tck"
+COMMIT2_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_length.txt"
+COMMIT2_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_weights.txt"
+COMMIT2_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt"
 weights_commit2="${proc_dwi}/COMMIT2/dict/Results_StickZeppelinBall_COMMIT2/streamline_weights.txt"
-if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_commit2" ]]; then
-    #COMMIT2
-    COMMIT2_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered.tck"
-    COMMIT2_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_length.txt"
-    COMMIT2_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_weights.txt"
-    COMMIT2_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt"
 
-    if [[ ! -f $COMMIT2_weighttimeslength ]]; then
+if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$COMMIT2_tck" ]]; then
+    if [[ ! -f $weights_commit2 ]]; then
         dwi_up_mif="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
         wm_fod_mif="${proc_dwi}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.mif"
         wm_fod_json=${tmp}/${idBIDS}_wm_fod_norm.json
@@ -257,20 +257,18 @@ if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$weights_co
             rm -r "${proc_dwi}/COMMIT2"
         fi
         done
-     exit
+        fi
         # Compute network density
 	    Do_cmd tck2connectome -nthreads $threads $COMMIT2_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz $proc_dwi/nos_commit2.txt -symmetric -zero_diagonal -quiet -force
         # Get track length
         Do_cmd tckstats $COMMIT2_tck -dump $COMMIT2_length -force
         # Get track volume
         matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT2_weighttimeslength = weight_times_length('$COMMIT2_weights','$COMMIT2_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt', 'COMMIT2_weighttimeslength', '-ASCII'); exit"
-    fi
-
+    
     if [ "$nocleanup" == "FALSE" ]; then
         # Here to cleanup some files
         rm -r ${proc_dwi}/COMMIT2/dict/dict*
     fi
-
 fi
 
 #Setting up weights and filter for the connectomes
