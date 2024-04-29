@@ -16,7 +16,7 @@ Quick COMMIT dual encoding python code
 #-----------------------------------#
 #------------- SETUP ---------------#
 #-----------------------------------#
-
+commit.core.setup() 
 # Inputs
 ID  		= sys.argv[1]
 in_dir   	= sys.argv[2]
@@ -53,7 +53,7 @@ trk2dictionary.run(
     ## peaks_use_affine      = True
 )
 
-commit.core.setup(ndirs=500)
+#commit.core.setup(ndirs=500)
 
 # Setting parameters
 print('\n Setting parameters \n') 

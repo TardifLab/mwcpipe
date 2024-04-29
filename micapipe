@@ -136,6 +136,7 @@ echo -e "
 \t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (BIDS format) that will be used to calibrate the alpha factor for MVF calculation
 \t\t\033[38;5;120m-MySD\033[0m                : Run MySD and calculate tract-specific myelin volume
 \t\t\033[38;5;120m-gratio\033[0m              : Run MySD and COMMIT, and calculate tract-specific g-ratio
+\t\t\033[38;5;120m-gratiotractometry\033[0m   : Obtain g-ratio tractometry through NODDI
 \t\t\033[38;5;120m-Dual_MTOn\033[0m           : Dual encoded MTon-DWI image - will run DUAL-COMMIT if all the other Dual options have inputs
 \t\t\033[38;5;120m-Dual_MTOFF\033[0m          : Dual encoded MToff-DWI image
 \t\t\033[38;5;120m-Dual_bvals\033[0m          : Dual encoded MT-DWI b-values
@@ -391,6 +392,10 @@ do
     gratio=TRUE
     shift
   ;;
+  -gratiotractometry)
+    gratiotractometry=TRUE
+    shift
+  ;;
   -MTsat_DWI)
     MTsat_DWI=TRUE
     MTsat_DWI_input=$2
@@ -613,6 +618,7 @@ if [ -z ${filter} ]; then filter="SIFT2"; else filter=$filter_input; fi
 if [ -z ${MVFalpha_list} ]; then MVFalpha_list=FALSE; else MVFalpha_list=$MVFalpha_list_input; fi
 if [ -z ${MySD} ]; then MySD=FALSE; else MySD=TRUE; fi
 if [ -z ${gratio} ]; then gratio=FALSE; else gratio=TRUE; fi
+if [ -z ${gratiotractometry} ]; then gratiotractometry=FALSE; else gratiotractometry=TRUE; fi
 if [ -z ${Dual_MTON} ] && [ -z ${Dual_MTOFF} ]; then 
     Dual_MTON=FALSE
     Dual_MTOFF=FALSE
@@ -1000,7 +1006,7 @@ fi
 #   REQUIRES -proc_dwi 
 if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
     log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat_DWI $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry"
+    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $gratiotractometry $MTsat_DWI $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Tract-specific processing (COMMIT)"

@@ -22,6 +22,7 @@ ID          = sys.argv[1]
 in_dir   	= sys.argv[2]
 tmp_dir     = sys.argv[3]
 tractogram  = sys.argv[4]
+mtsat       = sys.argv[5]
 
 print(".\n *** Initializing COMMIT for: ", ID)
 print(".\n *** Tractogram: ", tractogram)
@@ -31,7 +32,6 @@ dict_dir        = in_dir + "/MySD"
 
 # Files
 wm_mask        	= tmp_dir + "/" + ID  + "_dwi_wm_mask.nii.gz"
-mtsat           = in_dir + "/" + ID + "_space-dwi_desc-MVFmap.nii.gz"
 
 trk2dictionary.run(
      filename_tractogram = tractogram,

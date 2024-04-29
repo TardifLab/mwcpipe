@@ -72,9 +72,21 @@ elif [ "$2" == proc_COMMIT ] ; then
                 -ses $SESSION \
                 -MTsat_DWI "${OUT_DIR}/micapipe/sub-${1}/${SESSION}/dwi/sub-${1}_${SESSION}_space-dwi_desc-MTsat_SyN.nii.gz" \
 		        -gratio \
+                -gratiotractometry \
 		        -MVFalpha_list $MVFlist \
                 -tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii ${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_R1map.nii.gz" \
                 -proc_COMMIT
+
+#                -Dual_MTON "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi_MT_on_dn_dw_db.nii.gz" \
+#                -Dual_MTOFF "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi_MT_off_dn_dw_db.nii.gz" \
+#                -Dual_bvals "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi.bvals" \
+#                -Dual_bvecs "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi.bvecs" \
+
+#                -MTsat_DWI "${OUT_DIR}/micapipe/sub-${1}/${SESSION}/dwi/sub-${1}_${SESSION}_space-dwi_desc-MTsat_SyN.nii.gz" \
+#		        -gratio \
+#                -gratiotractometry \
+#		        -MVFalpha_list $MVFlist \
+#                -tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii ${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_R1map.nii.gz" \
 
 elif [ "$2" == FC ] ; then
       # resting state fMRI & FC processing

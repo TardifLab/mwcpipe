@@ -25,14 +25,15 @@ tmpDir=$7
 MVFalpha_list=$8
 MySD=$9
 gratio=${10}
-MTsat_in_dwi=${11}
-Dual_MTON=${12}
-Dual_MTOFF=${13}
-Dual_bvals=${14}
-Dual_bvecs=${15}
-tractometry=${16} 
-tractometry_input=${17}
-PROC=${18}
+gratiotractometry=${11}
+MTsat_in_dwi=${12}
+Dual_MTON=${13}
+Dual_MTOFF=${14}
+Dual_bvals=${15}
+Dual_bvecs=${16}
+tractometry=${17} 
+tractometry_input=${18}
+PROC=${19}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -77,71 +78,36 @@ Do_cmd mkdir -p "$tmp"
 trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
 
 # -----------------------------------------------------------------------------------------------
-# Computing alpha for MVF
-alpha=${tmpDir}/04_COMMIT/alpha.txt
-if [[ ${MySD}  == "TRUE" || ${gratio}  == "TRUE" ]] && [[ ! -f "$alpha" ]]; then
-    Info "Calculating alpha for MTsat to MVF scaling"
-    if [[ ! -d "${tmpDir}/MVF_calc" ]]; then
-        Do_cmd mkdir ${tmpDir}/MVF_calc
-        cat $MVFalpha_list|while read line; do
-            IFS='_' read -r -a array <<< "${line}"
-            alpha_sub="${array[0]}"
-            alpha_ses="${array[1]}"
-            Do_cmd antsApplyTransforms -d 3 -n NearestNeighbor \
-                   -i "${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts/splenium.nii.gz" \
-                   -r "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-t1w_nativepro_SyN.nii.gz" \
-                   -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_1Warp.nii.gz" \
-                   -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_0GenericAffine.mat" \
-                   -t ["$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
-                   -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
-                   -o "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz"
-            Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsat_SyN.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
-            Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/COMMIT2/dict/Results_StickZeppelinBall_COMMIT1/compartment_IC.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
-            Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_model-DTI_map-FA.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_FA_MNI152_1mm_splenium.nii.gz"
-        done
-        matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alpha('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_COMMIT/alpha.txt', 'alpha', '-ASCII'); exit"
-        Do_cmd rm -r ${tmpDir}/MVF_calc
-    else
-        until [ -f $alpha ]; do Info "Alpha computation for MTsat to MVF scaling is already in progress, waiting 10 min for it to finish"; sleep 10m; done
+# MySD filtering and weighting for tract-specific MTsat 
 
-    fi
-else
-    Info "Alpha has already been calculated for MTsat to MVF scaling"
-fi
-
-# -----------------------------------------------------------------------------------------------
-# MySD filtering and weighting for tract-specific myelin volume 
-
-MVF_in_dwi="${proc_dwi}/${idBIDS}_space-dwi_desc-MVFmap.nii.gz"
 MySD_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered.tck"
 MySD_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered_length.txt"
-MySD_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered_weights.txt"
-MySD_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered_volume.txt"
+MySD_weights_MTsat="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered_MTsatweights.txt"
+MySD_weighttimeslength_MTsat="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered_MTsatvolume.txt"
 
-if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimeslength ]]; then Info "Prepping MySD inputs"
+if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimeslength_MTsat ]]; then Info "Prepping MySD inputs"
 
-    MTsat_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-MTsat_SyN.nii.gz
     MySD=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/MySD.py
     weights_MySD=${proc_dwi}/MySD/Results_VolumeFractions/streamline_weights.txt
-
     f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
     wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
 
  	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask
-    alpha=$(cat $tmpDir/04_COMMIT/alpha.txt)
-    Do_cmd fslmaths $MTsat_in_dwi -mul $alpha $MVF_in_dwi
 
     while [[ ! -f $weights_MySD  ]] ; do
     Info "Running MySD"
- 	/data_/tardiflab/wenda/programs/localpython/bin/python3.10 $MySD $idBIDS $proc_dwi $tmp $COMMIT2_tck
+ 	/data_/tardiflab/wenda/programs/localpython/bin/python3.10 $MySD $idBIDS $proc_dwi $tmp $COMMIT2_tck $MTsat_in_dwi
     # Removing streamlines whose weights are too low
-  	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_MySD -tck_weights_out $MySD_weights $COMMIT2_tck $MySD_tck -force
+  	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_MySD $COMMIT2_tck $MySD_tck -force
     # Testing if MySD ran into any issues
     tmptckcount=$(tckinfo $MySD_tck -count)
-    if [[ "${tmptckcount##* }" -eq 0 ]]; then
+    tmpunfilteredtckcount=$(tckinfo $COMMIT2_tck -count)
+    if [[ "${tmptckcount##* }" -eq 0 ]] || [[ "${tmpunfilteredtckcount##* }" -eq "${tmptckcount##* }" ]] ; then
         rm -r "${proc_dwi}/MySD"
     fi
     done
+
+  	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_MySD -tck_weights_out $MySD_weights_MTsat $COMMIT2_tck $MySD_tck -force
 
     Info "Getting DK85 parcellation"
     # Converting aparc+aseg parcellation  
@@ -173,7 +139,7 @@ if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimes
     # Getting streamline length
     Do_cmd tckstats $MySD_tck -dump $MySD_length -force
     # Getting streamline myelin volume
-    matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); MySD_weighttimeslength = weight_times_length('$MySD_weights','$MySD_length'); save('$MySD_weighttimeslength', 'MySD_weighttimeslength', '-ASCII'); exit"
+    matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); MySD_weighttimeslength = weight_times_length('$MySD_weights_MTsat','$MySD_length'); save('$MySD_weighttimeslength_MTsat', 'MySD_weighttimeslength', '-ASCII'); exit"
 
     if [ "$nocleanup" == "FALSE" ]; then
         # Cleaning up tmp files
@@ -215,13 +181,16 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_weighttimeslength ]]; then Info
     Info "Running COMMIT"
  	/data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp $MySD_tck
     # Removing streamlines whose weights are too low
-  	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_COMMIT -tck_weights_out $COMMIT_weights $MySD_tck $COMMIT_tck -force
+  	Do_cmd tckedit -minweight 0.00001 -tck_weights_in $weights_COMMIT $MySD_tck $COMMIT_tck -force
     # Testing if COMMIT ran into any issues
     tmptckcount=$(tckinfo $COMMIT_tck -count)
-    if [[ "${tmptckcount##* }" -eq 0 ]]; then
+        tmpunfilteredtckcount=$(tckinfo $MySD_tck -count)
+    if [[ "${tmptckcount##* }" -eq 0 ]] || [[ "${tmpunfilteredtckcount##* }" -eq "${tmptckcount##* }" ]] ; then
         rm -r "${proc_dwi}/COMMIT"
     fi
     done
+
+  	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_COMMIT -tck_weights_out $COMMIT_weights $MySD_tck $COMMIT_tck -force
 
     if [[ ! -f $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ]]; then Info "Getting DK85 parcellation"
         # Converting aparc+aseg parcellation  
@@ -256,12 +225,187 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_weighttimeslength ]]; then Info
     # Getting streamline myelin volume
     matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT_weighttimeslength = weight_times_length('$COMMIT_weights','$COMMIT_length'); save('$COMMIT_weighttimeslength', 'COMMIT_weighttimeslength', '-ASCII'); exit"
 
+    # Grabbing IC for g-ratio calibration through COMMIT framework
+    if [[ ! -d "${tmpDir}/IC_folder" ]]; then
+        Do_cmd mkdir ${tmpDir}/IC_folder
+    fi
+    cat $MVFalpha_list|while read line; do
+        if [[ ${line} == ${idBIDS} ]]; then 
+            IC=${tmpDir}/IC_folder/${idBIDS}_IC_brain.nii.gz
+            cp ${proc_dwi}/COMMIT/dict/Results_StickZeppelinBall_AdvancedSolvers/compartment_IC.nii.gz $IC
+        fi
+    done
+
     if [ "$nocleanup" == "FALSE" ]; then
         # Cleaning up tmp files
         rm -r ${proc_dwi}/COMMIT/dict/dict*
     fi
 
     else Info "COMMIT weights were already multiplied by length"; 
+fi
+
+# -----------------------------------------------------------------------------------------------
+# Calibrating g-ratio through COMMIT
+alpha=${tmpDir}/04_COMMIT/alpha.txt
+MySD_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered_weights.txt"
+MySD_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-MySD-filtered_volume.txt"
+
+if [[ ${MySD}  == "TRUE" || ${gratio}  == "TRUE" ]] && [[ ! -f "$MySD_weighttimeslength" ]]; then
+
+    if [[ ! -f "$alpha" ]]; then
+        number_subject=($(awk 'END { print NR }' ${MVFalpha_list} )) 
+        number_file=($(ls ${tmpDir}/IC_folder -1 | wc -l)) 
+
+        until [ $number_subject == $number_file ]; do 
+            Info "Getting IC file for all subjects, waiting for 10m"
+            sleep 10m
+            number_file=($(ls ${tmpDir}/IC_folder -1 | wc -l)) 
+        done
+
+        Info "Calculating alpha for MTsat to MVF scaling"
+        if [[ ! -d "${tmpDir}/MVF_calc" ]]; then
+            Do_cmd mkdir ${tmpDir}/MVF_calc
+            cat $MVFalpha_list|while read line; do
+                IFS='_' read -r -a array <<< "${line}"
+                alpha_sub="${array[0]}"
+                alpha_ses="${array[1]}"
+                Do_cmd antsApplyTransforms -d 3 -n NearestNeighbor \
+                       -i "${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts/splenium.nii.gz" \
+                       -r "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-t1w_nativepro_SyN.nii.gz" \
+                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_1Warp.nii.gz" \
+                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_0GenericAffine.mat" \
+                       -t ["$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
+                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
+                       -o "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz"
+                Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsat_SyN.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
+                Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$tmpDir/IC_folder/${alpha_sub}_${alpha_ses}_IC_brain.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
+                Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_model-DTI_map-FA.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_FA_MNI152_1mm_splenium.nii.gz"
+            done
+            matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alpha('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_COMMIT/alpha.txt', 'alpha', '-ASCII'); exit"
+            Do_cmd rm -r ${tmpDir}/MVF_calc
+        else
+            until [ -f $alpha ]; do Info "Alpha computation for MTsat to MVF scaling is already in progress, waiting 10 min for it to finish"; sleep 10m; done
+
+        fi
+    fi
+
+    alpha_value=$(cat $alpha)
+    matlab -nodisplay -r "weight = dlmread('${MySD_weights_MTsat}'); calibrated_weight = weight*${alpha_value}; save('${MySD_weights}', 'calibrated_weight', '-ASCII'); exit" 
+    matlab -nodisplay -r "weight = dlmread('${MySD_weighttimeslength_MTsat}'); calibrated_weight = weight*${alpha_value}; save('${MySD_weighttimeslength}', 'calibrated_weight', '-ASCII'); exit" 
+
+else
+    Info "MySD MTsat weights were already scaled to MVF"
+fi
+
+# -----------------------------------------------------------------------------------------------
+# Calibrating g-ratio through NODDI - voxel wise
+
+if [[ "$gratiotractometry" == "TRUE" ]]; then
+
+    alpha_NODDI=${tmpDir}/04_COMMIT/alpha_NODDI.txt
+
+    NODDI_dir="${proc_dwi}/NODDI"
+    NODDI_NDI=$NODDI_dir/fit_NDI_up.nii.gz
+    dwi_COR="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc.mif"
+    dwi_COR_nii="${tmp}/${idBIDS}_space-dwi_desc-dwi_preproc.nii.gz"
+    dwi_COR_mask="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
+    bvecs=${tmp}/${idBIDS}_bvecs.txt 
+    bvals=${tmp}/${idBIDS}_bvals.txt
+
+    if [[ ! -f "$NODDI_NDI" ]]; then
+        Info "Calculating NODDI metrics"
+        SCILPY_NODDI=${MICAPIPE}/tardiflab/scripts/01_processing/scilpy/scripts/scil_NODDI_maps.py
+        # Here we're using conda. If python3.10 is installed in the local space, remove all "conda" commands
+        Do_cmd mrconvert $dwi_COR -export_grad_fsl $bvecs $bvals $dwi_COR_nii -force
+        Do_cmd dwi2mask $dwi_COR $dwi_COR_mask -force
+        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $SCILPY_NODDI $dwi_COR_nii $bvals $bvecs --mask $dwi_COR_mask --out_dir $NODDI_dir --processes $threads -v 
+  	    Do_cmd mrgrid $NODDI_dir/fit_NDI.nii.gz regrid -voxel $res "$NODDI_NDI"
+    else
+        Info "Subject ${id} has NODDI metrics"; ((Nsteps++))
+    fi
+
+    if [[ ! -f "$alpha_NODDI" ]]; then
+        Info "Calculating alpha for NODDI calibration"
+        if [[ ! -d "${tmpDir}/ICNODDI_folder" ]]; then
+            Do_cmd mkdir ${tmpDir}/ICNODDI_folder
+        fi
+
+        cat $MVFalpha_list|while read line; do
+            if [[ ${line} == ${idBIDS} ]]; then 
+                IC=${tmpDir}/ICNODDI_folder/${idBIDS}_ICNODDI_brain.nii.gz
+                cp $NODDI_NDI $IC
+            fi
+        done
+
+        number_subject=($(awk 'END { print NR }' ${MVFalpha_list} )) 
+        number_file=($(ls ${tmpDir}/ICNODDI_folder -1 | wc -l)) 
+
+        until [ $number_subject == $number_file ]; do 
+            Info "Getting IC-NODDI file for all subjects, waiting additional 10m"
+            sleep 10m
+            number_file=($(ls ${tmpDir}/ICNODDI_folder -1 | wc -l)) 
+        done
+
+        Info "Calculating alpha for MTsat to MVF scaling through NODDI"
+        if [[ ! -d "${tmpDir}/MVFNODDI_calc" ]]; then
+            Do_cmd mkdir ${tmpDir}/MVFNODDI_calc
+            cat $MVFalpha_list|while read line; do
+                IFS='_' read -r -a array <<< "${line}"
+                alpha_sub="${array[0]}"
+                alpha_ses="${array[1]}"
+                Do_cmd antsApplyTransforms -d 3 -n NearestNeighbor \
+                       -i "${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts/splenium.nii.gz" \
+                       -r "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-t1w_nativepro_SyN.nii.gz" \
+                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_1Warp.nii.gz" \
+                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_0GenericAffine.mat" \
+                       -t ["$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
+                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
+                       -o "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz"
+                Do_cmd fslmaths "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsat_SyN.nii.gz" -nan "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
+                Do_cmd fslmaths "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$tmpDir/ICNODDI_folder/${alpha_sub}_${alpha_ses}_ICNODDI_brain.nii.gz" -nan "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
+                Do_cmd fslmaths "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_model-DTI_map-FA.nii.gz" -nan "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_FA_MNI152_1mm_splenium.nii.gz"
+            done
+            matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alphaNODDI('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_COMMIT/alpha_NODDI.txt', 'alpha', '-ASCII'); exit"
+            Do_cmd rm -r ${tmpDir}/MVFNODDI_calc
+        else
+            until [ -f $alpha_NODDI ]; do Info "Alpha computation for MTsat to MVF scaling is already in progress, waiting 10 min for it to finish"; sleep 10m; done
+
+        fi
+    fi
+
+    gratiomap=${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap.nii.gz
+    weights_gratio="${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap_track_weight.csv"
+    MVF_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-MVFmap.nii.gz
+    alphaNODDI_value=$(cat $alpha_NODDI)
+
+    if [[ ! -f "$weights_gratio" ]]; then
+
+        f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
+        wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
+     	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask -force 
+        Do_cmd fslmaths $MTsat_in_dwi -mul $alphaNODDI_value $MVF_in_dwi
+        Do_cmd fslmaths $NODDI_NDI -mul $MVF_in_dwi $tmp/MVFIC.nii.gz
+        Do_cmd fslmaths $NODDI_NDI -sub $tmp/MVFIC.nii.gz $tmp/gratiotop.nii.gz
+        Do_cmd fslmaths $tmp/gratiotop.nii.gz -add $MVF_in_dwi $tmp/gratiobot.nii.gz
+        Do_cmd fslmaths $tmp/gratiotop.nii.gz -div $tmp/gratiobot.nii.gz $tmp/gratio.nii.gz
+        Do_cmd fslmaths $tmp/gratio.nii.gz -sqrt $gratiomap
+        Do_cmd fslmaths $gratiomap -mul $wm_mask $gratiomap
+
+        # Grabbing the correct tract
+        if [ -f $COMMIT_tck  ]; then
+            tractometry_tck=$COMMIT_tck
+        elif [ -f $MySD_tck ]; then
+            tractometry_tck=$MySD_tck
+        else
+            tractometry_tck=$COMMIT2_tck
+        fi
+
+        Do_cmd tcksample $COMMIT_tck $gratiomap $weights_gratio -stat_tck median -force
+
+    else
+        Info "Subject ${id} has gratio metrics";
+    fi
+    
 fi
 
 # -----------------------------------------------------------------------------------------------
@@ -366,19 +510,22 @@ if [[ ${dual}  == "TRUE" ]] && [[ ! -f $DUAL_tck ]]; then Info "Prepping COMMIT 
             Info "Running COMMIT for MToff"
             /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT_DUAL $idBIDS $proc_dwi $tmp $COMMIT2_DUAL_tck $tmp/mtoff_upscaled.nii.gz $Dual_bvals $Dual_bvecs ${proc_dwi}/DUALoff
         fi  
+
         # Removing invalid steamlines for Dual-MTon-DWI
-        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_dualon $COMMIT2_DUAL_tck $DUAL_tck -force
+        Do_cmd tckedit -minweight 0.00001 -tck_weights_in $weights_dualon $COMMIT2_DUAL_tck $DUAL_tck -force
         # Rerunning COMMIT is necessary
-        tmptckcount=$(tckinfo $COMMIT2_DUAL_tck -count)
-        if [[ "${tmptckcount##* }" -eq 0 ]]; then 
-            rm -r "${proc_sc}/DUALon"
+        tmptckcount=$(tckinfo $DUAL_tck -count)
+        tmpunfilteredtckcount=$(tckinfo $COMMIT2_DUAL_tck -count)
+        if [[ "${tmptckcount##* }" -eq 0 ]] || [[ "${tmpunfilteredtckcount##* }" -eq "${tmptckcount##* }" ]] ; then
+            rm -r "${proc_dwi}/DUALon"
         fi
         #Removing invalid streamlines for Dual-MToff-DWI
-        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_dualoff $COMMIT2_DUAL_tck $DUAL_tck -force
+        Do_cmd tckedit -minweight 0.00001 -tck_weights_in $weights_dualoff $COMMIT2_DUAL_tck $DUAL_tck -force
         # Rerunning COMMIT is necessary
-        tmptckcount=$(tckinfo $COMMIT2_DUAL_tck -count)
-        if [[ "${tmptckcount##* }" -eq 0 ]]; then
-            rm -r "${proc_sc}/DUALoff"
+        tmptckcount=$(tckinfo $DUAL_tck -count)
+        tmpunfilteredtckcount=$(tckinfo $COMMIT2_DUAL_tck -count)
+        if [[ "${tmptckcount##* }" -eq 0 ]] || [[ "${tmpunfilteredtckcount##* }" -eq "${tmptckcount##* }" ]] ; then
+            rm -r "${proc_dwi}/DUALoff"
         fi
         done
 
@@ -395,20 +542,20 @@ if [[ ${dual}  == "TRUE" ]] && [[ ! -f $DUAL_tck ]]; then Info "Prepping COMMIT 
 
 
     if [ "$nocleanup" == "FALSE" ]; then
-        # Cleaning up tmp files
+        # Cleaning up tmp files 
+        Info "Removing DUAL tmp files"
         rm -r ${proc_dwi}/DUALon/dict*
         rm -r ${proc_dwi}/DUALoff/dict*
     fi
 
 fi
 
-
 # Connectomes generation 
 parcellations=($(find "${dir_volum}" -name "*.nii.gz" ! -name "*cerebellum*" ! -name "*subcortical*"))
 lut_sc="${util_lut}/lut_subcortical-cerebellum_mics.csv"
 
 if [[ ${dual}  == "TRUE" ]]; then
-
+    Info "Generating DUAL connectomes"
     dual_cere="${tmp}/${idBIDS}_space-dual_atlas-cerebellum.nii.gz"
     dual_subc="${tmp}/${idBIDS}_space-dual_atlas-subcortical.nii.gz"
     T1str_nat="${idBIDS}_space-nativepro_t1w_atlas"
@@ -546,20 +693,23 @@ if [[ ${gratio}  == "TRUE" ]]; then
                 Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int #cerebellar parcellation
             fi
 
-        if [[ ! -f "${connectome_str_COMMIT}axonal-cross-sectional-area_full-connectome.txt" ]] || [[ ! -f "${connectome_str_COMMIT}axonal-volume_full-connectome.txt" ]] || [[ ! -f "${connectome_str_COMMIT}gratio_full-connectome.txt" ]]; then
 
-            dwi_all="${tmp}/${id}_${parc_name}-full_dwi.nii.gz"
-            if [[ ! -f $dwi_all ]]; then Info "Building $parc_name cortical connectome"
-                # Take parcellation into DWI space
-                Do_cmd antsApplyTransforms -d 3 -e 3 -i "$seg" -r "$dwi_b0" -n GenericLabel "$trans_T12dwi" -o "$dwi_cortex" -v -u int
-                # Remove the medial wall
-                for i in 1000 2000; do Do_cmd fslmaths "$dwi_cortex" -thr "$i" -uthr "$i" -binv -mul "$dwi_cortex" "$dwi_cortex"; done
-                Info "Building $parc_name cortical-subcortical connectome"
-                dwi_cortexSub="${tmp}/${id}_${parc_name}-sub_dwi.nii.gz"
-                Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_subc" -add "$dwi_cortex" "$dwi_cortexSub" -odt int #subcortical parcellation
-                Info "Building $parc_name cortical-subcortical-cerebellum connectome"
-                Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int #cerebellar parcellation
-            fi
+            #### Bad g-ratio to be removed
+            COMMIT2_weightstimeslength=$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-filtered_volume.txt
+            Do_cmd tck2connectome -nthreads "$threads" "$COMMIT2_tck" "$dwi_all" "${connectome_str_COMMIT}COMMIT2AVF_full-connectome.txt" -tck_weights_in "$COMMIT2_weightstimeslength" -assignment_radial_search 2 -symmetric -zero_diagonal -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_COMMIT}COMMIT2AVF_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+    		matlab -nodisplay -r "MVF = dlmread('${connectome_str_MySD}myelin-volume_full-connectome.txt'); AVF = dlmread('${connectome_str_COMMIT}COMMIT2AVF_full-connectome.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${connectome_str_COMMIT}badgratio_full-connectome.txt', 'gratio', '-ASCII'); exit"
+            #### Bad g-ratio to be removed
+
+
+
+
+        if [[ "$gratiotractometry" == "TRUE" ]] && [[ ! -f "${connectome_str_COMMIT}gratio-tractometry_full-connectome.txt" ]]; then
+            Do_cmd tck2connectome -nthreads "$threads" "$COMMIT_tck" "$dwi_all" "${connectome_str_COMMIT}gratio-tractometry_full-connectome.txt" -scale_file "$weights_gratio" -assignment_radial_search 2 -stat_edge mean -symmetric -zero_diagonal -quiet
+            Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str_COMMIT}gratio-tractometry_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
+        fi
+
+        if [[ ! -f "${connectome_str_COMMIT}axonal-cross-sectional-area_full-connectome.txt" ]] || [[ ! -f "${connectome_str_COMMIT}axonal-volume_full-connectome.txt" ]] || [[ ! -f "${connectome_str_COMMIT}gratio_full-connectome.txt" ]]; then
 
             # Build the Cortical-Subcortical-Cerebellum connectomes
             Do_cmd tck2connectome -nthreads "$threads" "$COMMIT_tck" "$dwi_all" "${connectome_str_COMMIT}axonal-cross-sectional-area_full-connectome.txt" -tck_weights_in "$COMMIT_weights" -assignment_radial_search 2 -symmetric -zero_diagonal -quiet

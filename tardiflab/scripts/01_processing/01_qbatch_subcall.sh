@@ -30,16 +30,16 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
   elif [ $FUNC_ID == commit ]          ; then VM=50 ;  Fn=7  ; script="${scriptdir}/04_run_commit1.sh" ;         	# very memory intense, not ideal if tck size > 10-15M streamlines, VM=30 works most of the time
   elif [ $FUNC_ID == connectomes ]     ; then VM=10 ;  Fn=8  ; script="${scriptdir}/05_connectomes.sh" ; 		# VM=3 works most of the time
   elif [ $FUNC_ID == FC ]              ; then VM=20 ;  Fn=9  ; script="${scriptdir}/02_micapipe_call.sh" ;
-  elif [ $FUNC_ID == proc_COMMIT ]     ; then VM=40 ;  Fn=10 ; script="${scriptdir}/02_micapipe_call.sh" ;
+  elif [ $FUNC_ID == proc_COMMIT ]     ; then VM=50 ;  Fn=10 ; script="${scriptdir}/02_micapipe_call.sh" ;
   elif [ $FUNC_ID == conn_slice ]      ; then VM=5  ;  Fn=00 ; script="${scriptdir}/connSlicer_qbatch.sh" ;
   fi
 
 # directory to store log files
   log_func_dir="${logdir}/$Fn_$FUNC_ID"
 
-
+<<comment
 # Session-1
-  for SUB in {02..30} ; do
+  for SUB in {02..17} 19 28 30; do
 #  for SUB in 15 ; do
 
 	ID=sub-"${SUB}"
@@ -52,7 +52,7 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 	qbatch -q all.q -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"	# option to gauge resource allocation
   done
 
-<<comment
+comment
 # Session-1
   for SUB in 18 {20..27} 29 ; do
 
@@ -66,6 +66,7 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 #       qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"    # option to gauge resource allocation
   done
 
+
 # Session-2
   for SUB in 18 {20..27} 29 ; do
 
@@ -78,4 +79,4 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
         qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" ${script} $SUB $FUNC_ID "2"                            # Standard call
 #       qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "2"    # option to gauge resource allocation
   done
-comment
+
