@@ -29,8 +29,9 @@ dwi_str=${11}
 filter=${12}
 reg_lambda=${13}
 tractometry=${14} 
-tractometry_input=${15}
-PROC=${16}
+filter_types=${15}
+tractometry_input=${16}
+PROC=${17}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -193,246 +194,161 @@ fi
 
 # -----------------------------------------------------------------------------------------------
 # Filtering
-weights_sift2=${tmp}/SIFT2_${tracts}.txt
+if [[ ${filter}  == "TRUE" ]]; then
 
-if [[ "$filter" == "SIFT2" ]] || [[ "$filter" == "both" ]] && [[ ! -f "$weights_sift2" ]]; then
-    #SIFT2
-    Do_cmd tcksift2 -nthreads "$threads" "$tck" "$fod_wmN" "$weights_sift2"
-fi
+    for filter_name in $filter_types; do
 
-<<comment
-
-Work on this when I get back from vacation - Wen Da
-
-mkdir ${proc_dwi}/roi_image
-
-        Info "Getting DK85 parcellation for COMMIT2"
-        # Converting aparc+aseg parcellation  
-        Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
-        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
-        # Getting necessary files for labelsgmfix
-        Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
-        Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
-        Do_cmd fslmaths $tmp/T1_brain_mask_FS.nii.gz -bin $tmp/T1_brain_mask_FS.nii.gz
-        Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
-        # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
-        SGE_ROOT= 
-        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
-        # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
-        SGE_ROOT=/opt/sge
-
-    Do_cmd mri_convert ${dir_freesurfer}/mri/brainstemSsLabels.v12.FSvoxelSpace.mgz $tmp/T1_brain_FS_bstem.nii.gz --out_orientation LAS
-    Do_cmd fslmaths $tmp/nodes_fixSGM.nii.gz -uthr 85 -thr 85 -binv $tmp/T1_brain_FS_bstem_binv.nii.gz
-    Do_cmd fslmaths $tmp/nodes_fixSGM.nii.gz -mul $tmp/T1_brain_FS_bstem_binv.nii.gz $tmp/aparc+aseg_FS_nobstem.nii.gz
-    Do_cmd fslmaths $tmp/T1_brain_FS_bstem.nii.gz -binv -mul $tmp/aparc+aseg_FS_nobstem.nii.gz $tmp/aparc+aseg_FS_nobstem.nii.gz
-
-    Do_cmd fslmaths $tmp/T1_brain_FS_bstem.nii.gz -uthr 175 -thr 175 -bin $tmp/T1_brain_FS_medulla.nii.gz
-    Do_cmd fslmaths $tmp/T1_brain_FS_medulla.nii.gz -mul 85 $tmp/T1_brain_FS_medulla.nii.gz
-    Do_cmd fslmaths $tmp/aparc+aseg_FS_nobstem.nii.gz -add $tmp/T1_brain_FS_medulla.nii.gz $tmp/nodes_fixSGM.nii.gz
-
-        # Move parcel from T1 space to diffusion space
-        t1_fs_str="${tmp}/${idBIDS}_fs_to-nativepro_mode-image_desc_"
-        t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
-        Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
-        Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v 
-
-Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/AVF.txt -tck_weights_in ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered_volume.txt -symmetric -force
-
-Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/MVF.txt -tck_weights_in ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-filtered_volume.txt -symmetric -force
-
-Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz  ${proc_dwi}/roi_image/tracto.txt -scale_file ${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap_track_weight.csv -stat_edge mean -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/tract_assignments.txt
-
-matlab -nodisplay -r "MVF = dlmread('${proc_dwi}/roi_image/MVF.txt'); AVF = dlmread('${proc_dwi}/roi_image/AVF.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${proc_dwi}/roi_image/gratio.txt', 'gratio', '-ASCII'); exit"
-
-
-
-connectome2tck ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck /${proc_dwi}/roi_image/tract_assignments.txt ${proc_dwi}/roi_image/filt.tck -files single -nodes 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85 -exclusive
-
-tck2connectome ${proc_dwi}/roi_image/filt.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/nos.txt -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/filt_tract_assignments.txt  
-
-
-
-
-
-exit
-
-comment
-
-
-
-#COMMIT2
-COMMIT2_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered.tck"
-COMMIT2_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_length.txt"
-COMMIT2_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_weights.txt"
-COMMIT2_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt"
-weights_commit2="${proc_dwi}/COMMIT2/dict/Results_StickZeppelinBall_COMMIT2/streamline_weights.txt"
-
-if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$COMMIT2_tck" ]]; then
-    if [[ ! -f $weights_commit2 ]]; then
-        dwi_up_mif="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
-        wm_fod_mif="${proc_dwi}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.mif"
-        wm_fod_json=${tmp}/${idBIDS}_wm_fod_norm.json
-        wm_fod_nii=${tmp}/${idBIDS}_wm_fod_norm.nii.gz
-        f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
-        wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
-        dwi_up_nii=${tmp}/${idBIDS}_dwi_upscaled.nii.gz
-        bvecs=${tmp}/${idBIDS}_bvecs.txt
-        bvals=${tmp}/${idBIDS}_bvals.txt
-
-        COMMIT2=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT2.py
-
-        Info "Getting DK85 parcellation for COMMIT2"
-        # Converting aparc+aseg parcellation  
-        Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
-        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
-        # Getting necessary files for labelsgmfix
-        Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
-        Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
-        Do_cmd fslmaths $tmp/T1_brain_mask_FS.nii.gz -bin $tmp/T1_brain_mask_FS.nii.gz
-        Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
-        # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
-        SGE_ROOT= 
-        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM_orig.nii.gz -sgm_amyg_hipp -premasked
-        # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
-        SGE_ROOT=/opt/sge
-
-        # Move parcel from T1 space to diffusion space
-        t1_fs_str="${tmp}/${idBIDS}_fs_to-nativepro_mode-image_desc_"
-        t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
-        Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
-        Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v 
-
-     	Info "Getting NIFTI files for COMMIT"
-     	Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii
-     	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask
-     	Do_cmd mrconvert $dwi_up_mif -export_grad_fsl $bvecs $bvals $dwi_up_nii
-
-        while [[ ! -f $weights_commit2  ]] ; do #Sometimes run into an error with COMMIT outputs, reruning it seems to fix it
-        Info "Running COMMIT2"
-        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT2 ${idBIDS} $proc_dwi $tmp $reg_lambda #empirically determined to have a matrix density of 35% using the DK parcellation (2e-1 for deterministic at 3M, 8e-1 for probabilistic at 3M for MWC dataset)
-        # Remove any streamlines whose weights are too low
-        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit2 -tck_weights_out $COMMIT2_weights $tmp/DWI_tractogram_connecting.tck $COMMIT2_tck -force     
-        # Testing if COMMIT2 ran into any issues
-        tmptckcount=$(tckinfo $COMMIT2_tck -count)
-        if [[ "${tmptckcount##* }" -eq 0 ]]; then
-            rm -r "${proc_dwi}/COMMIT2"
+        weights_sift2="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_SIFT2_weights.txt"
+        if [[ "$filter_name" == "SIFT2" ]] && [[ ! -f "$weights_sift2" ]]; then
+         	Info "SIFT2 filtering"            
+            #SIFT2
+            Do_cmd tcksift2 -nthreads "$threads" "$tck" "$fod_wmN" "$weights_sift2"
         fi
-        done
-    fi
-        # Compute network density
-	    Do_cmd tck2connectome -nthreads $threads $COMMIT2_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz $proc_dwi/nos_commit2.txt -symmetric -zero_diagonal -quiet -force
-        # Get track length
-        Do_cmd tckstats $COMMIT2_tck -dump $COMMIT2_length -force
-        # Get track volume
-        matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT2_weighttimeslength = weight_times_length('$COMMIT2_weights','$COMMIT2_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt', 'COMMIT2_weighttimeslength', '-ASCII'); exit"
-    
-    if [ "$nocleanup" == "FALSE" ]; then
-        # Here to cleanup some files
-        rm -r ${proc_dwi}/COMMIT2/dict/dict*
-    fi
-fi
 
-<<comment
+        COMMIT2_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered.tck"
+        COMMIT2_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_length.txt"
+        COMMIT2_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_weights.txt"
+        COMMIT2_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt"
+        weights_commit2="${proc_dwi}/COMMIT2/dict/Results_StickZeppelinBall_COMMIT2/streamline_weights.txt"
 
-Work on this when I get back from vacation - Wen Da
+        if [[ $filter_name == "COMMIT2" ]] && [[ ! -f "$COMMIT2_tck" ]]; then
+         	Info "COMMIT2 filtering" 
+            if [[ ! -f $weights_commit2 ]]; then
+                dwi_up_mif="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
+                wm_fod_mif="${proc_dwi}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.mif"
+                wm_fod_json=${tmp}/${idBIDS}_wm_fod_norm.json
+                wm_fod_nii=${tmp}/${idBIDS}_wm_fod_norm.nii.gz
+                f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
+                wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
+                dwi_up_nii=${tmp}/${idBIDS}_dwi_upscaled.nii.gz
+                bvecs=${tmp}/${idBIDS}_bvecs.txt
+                bvals=${tmp}/${idBIDS}_bvals.txt
 
-COMMIT2_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered.tck"
-COMMIT2_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_length.txt"
-COMMIT2_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_weights.txt"
-COMMIT2_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt"
-weights_commit2="${proc_dwi}/COMMIT2/dict/Results_StickZeppelinBall_AdvancedSolvers/streamline_weights.txt"
+                COMMIT2=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT2.py
 
-if [[ $filter == "both" ]] || [[ $filter == "COMMIT2" ]] && [[ ! -f "$COMMIT2_tck" ]]; then
+                Info "Getting DK85 parcellation for COMMIT2"
+                # Converting aparc+aseg parcellation  
+                Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
+                Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
+                # Getting necessary files for labelsgmfix
+                Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
+                Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
+                Do_cmd fslmaths $tmp/T1_brain_mask_FS.nii.gz -bin $tmp/T1_brain_mask_FS.nii.gz
+                Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
+                # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
+                SGE_ROOT= 
+                Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM_orig.nii.gz -sgm_amyg_hipp -premasked
+                # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
+                SGE_ROOT=/opt/sge
 
-    dwi_up_mif="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
-    wm_fod_mif="${proc_dwi}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.mif"
-    wm_fod_json=${tmp}/${idBIDS}_wm_fod_norm.json
-    wm_fod_nii=${tmp}/${idBIDS}_wm_fod_norm.nii.gz
-    f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
-    wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
-    dwi_up_nii=${tmp}/${idBIDS}_dwi_upscaled.nii.gz
-    bvecs=${tmp}/${idBIDS}_bvecs.txt
-    bvals=${tmp}/${idBIDS}_bvals.txt
+                # Move parcel from T1 space to diffusion space
+                t1_fs_str="${tmp}/${idBIDS}_fs_to-nativepro_mode-image_desc_"
+                t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
+                Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
+                Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v 
 
-    COMMIT2=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT_init.py
+             	Info "Getting NIFTI files for COMMIT"
+             	Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii
+             	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask
+             	Do_cmd mrconvert $dwi_up_mif -export_grad_fsl $bvecs $bvals $dwi_up_nii
 
-    if [[ ! -f $weights_commit2 ]]; then
-
-        Info "Getting DK85 parcellation for COMMIT2"
-        # Converting aparc+aseg parcellation  
-        Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
-        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
-        # Getting necessary files for labelsgmfix
-        Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
-        Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
-        Do_cmd fslmaths $tmp/T1_brain_mask_FS.nii.gz -bin $tmp/T1_brain_mask_FS.nii.gz
-        Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
-        # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
-        SGE_ROOT= 
-        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
-        # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
-        SGE_ROOT=/opt/sge
-        # Move parcel from T1 space to diffusion space
-        t1_fs_str="${tmp}/${idBIDS}_fs_to-nativepro_mode-image_desc_"
-        t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
-        dwi_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_"
-        dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
-        dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
-        dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
-
-        Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
-        Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v 
-
-     	Info "Getting NIFTI files for COMMIT"
-     	Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii
-     	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask
-     	Do_cmd mrconvert $dwi_up_mif -export_grad_fsl $bvecs $bvals $dwi_up_nii
-
-        while [[ ! -f $weights_commit2  ]] ; do #Sometimes run into an error with COMMIT outputs, reruning it seems to fix it
-        Info "Running COMMIT2"
-     	/data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT2 $idBIDS $proc_dwi $tmp $tck
-        # Remove any streamlines whose weights are too low
-        Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit2 -tck_weights_out $COMMIT2_weights $tck $COMMIT2_tck -force     
-        # Testing if COMMIT2 ran into any issues
-        tmptckcount=$(tckinfo $COMMIT2_tck -count)
-        if [[ "${tmptckcount##* }" -eq 0 ]]; then
-            rm -r "${proc_dwi}/COMMIT2"
+                while [[ ! -f $weights_commit2  ]] ; do #Sometimes run into an error with COMMIT outputs, reruning it seems to fix it
+                Info "Running COMMIT2"
+                /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT2 ${idBIDS} $proc_dwi $tmp $reg_lambda #empirically determined to have a matrix density of 35% using the DK parcellation (2e-1 for deterministic at 3M, 8e-1 for probabilistic at 3M for MWC dataset)
+                # Remove any streamlines whose weights are too low
+                Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit2 -tck_weights_out $COMMIT2_weights $tmp/DWI_tractogram_connecting.tck $COMMIT2_tck -force     
+                # Testing if COMMIT2 ran into any issues
+                tmptckcount=$(tckinfo $COMMIT2_tck -count)
+                if [[ "${tmptckcount##* }" -eq 0 ]]; then
+                    rm -r "${proc_dwi}/COMMIT2"
+                fi
+                done
+            fi
+                # Compute network density
+	            Do_cmd tck2connectome -nthreads $threads $COMMIT2_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz $proc_dwi/nos_commit2.txt -symmetric -zero_diagonal -quiet -force
+                # Get track length
+                Do_cmd tckstats $COMMIT2_tck -dump $COMMIT2_length -force
+                # Get track volume
+                matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT2_weighttimeslength = weight_times_length('$COMMIT2_weights','$COMMIT2_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt', 'COMMIT2_weighttimeslength', '-ASCII'); exit"
+            
+            if [ "$nocleanup" == "FALSE" ]; then
+                # Here to cleanup some files
+                rm -r ${proc_dwi}/COMMIT2/dict/dict*
+            fi
         fi
-        done
-    fi
 
-        # Compute network density
-	    Do_cmd tck2connectome -nthreads $threads $COMMIT2_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz $proc_dwi/nos_commit2.txt -symmetric -zero_diagonal -quiet -force
-        # Get track length
-        Do_cmd tckstats $COMMIT2_tck -dump $COMMIT2_length -force
-        # Get track volume
-        matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT2_weighttimeslength = weight_times_length('$COMMIT2_weights','$COMMIT2_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT2-filtered_volume.txt', 'COMMIT2_weighttimeslength', '-ASCII'); exit"
-    
-    if [ "$nocleanup" == "FALSE" ]; then
-        # Here to cleanup some files
-        rm -r ${proc_dwi}/COMMIT2/dict/dict*
-    fi
-fi
+        COMMIT_tck="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT-filtered.tck"
+        COMMIT_length="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT-filtered_length.txt"
+        COMMIT_weights="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT-filtered_weights.txt"
+        COMMIT_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT-filtered_volume.txt"
+        weights_commit="${proc_dwi}/COMMIT/dict/Results_StickZeppelinBall_AdvancedSolvers/streamline_weights.txt"
 
-comment
+        if [[ $filter == "COMMIT" ]] && [[ ! -f "$COMMIT_tck" ]]; then
+         	Info "COMMIT filtering"
+            dwi_up_mif="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc_upscaled.mif"
+            wm_fod_mif="${proc_dwi}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.mif"
+            wm_fod_json=${tmp}/${idBIDS}_wm_fod_norm.json
+            wm_fod_nii=${tmp}/${idBIDS}_wm_fod_norm.nii.gz
+            f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
+            wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
+            dwi_up_nii=${tmp}/${idBIDS}_dwi_upscaled.nii.gz
+            bvecs=${tmp}/${idBIDS}_bvecs.txt
+            bvals=${tmp}/${idBIDS}_bvals.txt
 
-#Setting up weights and filter for the connectomes
-if [ "$filter" == "both" ]; then
-    weights=($weights_sift2 $weights_commit2)
-    filter=("SIFT2" "COMMIT2")
-elif [ "$filter" == "SIFT2" ]; then
-    weights="$weights_sift2"
-elif [ "$filter" == "COMMIT2" ]; then
-    weights="$weights_commit2"
+            COMMIT=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT_init.py
+
+            if [[ ! -f $weights_commit ]]; then
+
+             	Info "Getting NIFTI files for COMMIT"
+             	Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii
+             	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask
+             	Do_cmd mrconvert $dwi_up_mif -export_grad_fsl $bvecs $bvals $dwi_up_nii
+
+                while [[ ! -f $weights_commit  ]] ; do #Sometimes run into an error with COMMIT outputs, reruning it seems to fix it
+                Info "Running COMMIT2"
+             	/data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp $tck
+                # Remove any streamlines whose weights are too low
+                Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit -tck_weights_out $COMMIT_weights $tck $COMMIT_tck -force     
+                # Testing if COMMIT2 ran into any issues
+                tmptckcount=$(tckinfo $COMMIT2_tck -count)
+                if [[ "${tmptckcount##* }" -eq 0 ]]; then
+                    rm -r "${proc_dwi}/COMMIT2"
+                fi
+                done
+            fi
+
+                # Compute network density
+	            Do_cmd tck2connectome -nthreads $threads $COMMIT_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz $proc_dwi/nos_commit.txt -symmetric -zero_diagonal -quiet -force
+                # Get track length
+                Do_cmd tckstats $COMMIT_tck -dump $COMMIT_length -force
+                # Get track volume
+                matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT_weighttimeslength = weight_times_length('$COMMIT_weights','$COMMIT_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT-filtered_volume.txt', 'COMMIT_weighttimeslength', '-ASCII'); exit"
+            
+            if [ "$nocleanup" == "FALSE" ]; then
+                # Here to cleanup some files
+                rm -r ${proc_dwi}/COMMIT/dict/dict*
+            fi
+        fi
+    done
+
 fi
 
 # -----------------------------------------------------------------------------------------------
 # Build the Connectomes
-for j in "${!filter[@]}"; do
+for filter_name in $filter_types; do
+
+    #Setting up weights and filter for the connectomes
+    if [ "$filter_name" == "SIFT2" ]; then
+        weights="$weights_sift2"
+    elif [ "$filter_name" == "COMMIT2" ]; then
+        weights="$weights_commit2"
+    elif [ "$filter_name" == "COMMIT" ]; then
+        weights="$weights_commit"
+    fi
 
     for seg in "${parcellations[@]}"; do
         parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
-        connectome_str="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}_desc-iFOD2-${tracts}-${filter[j]}"
+        connectome_str="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}_desc-iFOD2-${tracts}-${filter_name}"
         lut="${util_lut}/lut_${parc_name}_mics.csv"
         dwi_cortex="${tmp}/${id}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
 
@@ -448,13 +364,13 @@ for j in "${!filter[@]}"; do
             # Build the Cortical connectomes
             Do_cmd tck2connectome -nthreads "$threads" \
                 "$tck" "$dwi_cortex" "${connectome_str}_cor-connectome.txt" \
-                -tck_weights_in "${weights[j]}" -quiet
+                -tck_weights_in "${weights}" -quiet
             Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str}_cor-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
 
             # Calculate the edge lenghts
             Do_cmd tck2connectome -nthreads "$threads" \
                 "$tck" "$dwi_cortex" "${connectome_str}_cor-edgeLengths.txt" \
-                -tck_weights_in "${weights[j]}" -scale_length -stat_edge mean -quiet
+                -tck_weights_in "${weights}" -scale_length -stat_edge mean -quiet
             Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str}_cor-edgeLengths.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
             if [[ -f "${connectome_str}_cor-connectome.txt" ]]; then ((Nparc++)); fi
         else
@@ -471,13 +387,13 @@ for j in "${!filter[@]}"; do
             # Build the Cortical-Subcortical connectomes
             Do_cmd tck2connectome -nthreads "$threads" \
                 "$tck" "$dwi_cortexSub" "${connectome_str}_sub-connectome.txt" \
-                -tck_weights_in "${weights[j]}" -quiet
+                -tck_weights_in "${weights}" -quiet
             Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str}_sub-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
 
             # Calculate the edge lenghts
             Do_cmd tck2connectome -nthreads "$threads" \
                 "$tck" "$dwi_cortexSub" "${connectome_str}_sub-edgeLengths.txt" \
-                -tck_weights_in "${weights[j]}" -scale_length -stat_edge mean -quiet
+                -tck_weights_in "${weights}" -scale_length -stat_edge mean -quiet
             Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str}_sub-edgeLengths.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
             if [[ -f "${connectome_str}_sub-connectome.txt" ]]; then ((Nparc++)); fi
         else
@@ -494,13 +410,13 @@ for j in "${!filter[@]}"; do
             # Build the Cortical-Subcortical-Cerebellum connectomes
             Do_cmd tck2connectome -nthreads "$threads" \
                 "$tck" "$dwi_all" "${connectome_str}_full-connectome.txt" \
-                -tck_weights_in "${weights[j]}" -quiet
+                -tck_weights_in "${weights}" -quiet
             Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str}_full-connectome.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
 
             # Calculate the edge lenghts
             Do_cmd tck2connectome -nthreads "$threads" \
                 "$tck" "$dwi_all" "${connectome_str}_full-edgeLengths.txt" \
-                -tck_weights_in "${weights[j]}" -scale_length -stat_edge mean -quiet
+                -tck_weights_in "${weights}" -scale_length -stat_edge mean -quiet
             Do_cmd Rscript "$MICAPIPE"/functions/connectome_slicer.R --conn="${connectome_str}_full-edgeLengths.txt" --lut1="$lut_sc" --lut2="$lut" --mica="$MICAPIPE"
             if [[ -f "${connectome_str}_full-connectome.txt" ]]; then ((Nparc++)); fi
         else
@@ -513,7 +429,7 @@ done
 chmod 770 -R "$dwi_cnntm"/* 2>/dev/null
 
 # -----------------------------------------------------------------------------------------------
-# Compute Auto-Tractography
+# Compute Auto-Tractography   ------------  weights is up to debate to what it should be.......
 if [ "$autoTract" == "TRUE" ]; then
     Info "Running Auto-tract"
     autoTract_dir="$proc_dwi"/auto_tract
@@ -523,10 +439,6 @@ if [ "$autoTract" == "TRUE" ]; then
     echo -e "\033[38;5;118m\nCOMMAND -->  \033[38;5;122m03_auto_tracts.sh -tck $tck -outbase $autoTract_dir/${id} -mask $dwi_mask -fa $fa_niigz -tmpDir $tmp -keep_tmp  \033[0m"
     "$MICAPIPE"/functions/03_auto_tracts.sh -tck "$tck" -outbase "${autoTract_dir}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}-${filter}" -mask "$dwi_mask" -fa "$fa_niigz" -weights "$weights" -tmpDir "$tmp" -keep_tmp
 fi
-
-# -----------------------------------------------------------------------------------------------
-# save the tractogram and the SIFT2 weights
-if [ "$keep_tck" == "TRUE" ]; then Do_cmd mv "$tck" "$proc_dwi"; Do_cmd mv "$weights" "${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_weights.txt"; fi
 
 # -----------------------------------------------------------------------------------------------
 # Tractometry 

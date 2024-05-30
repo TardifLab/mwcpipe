@@ -43,7 +43,7 @@ echo -e "
 \t\033[38;5;197m-Morphology\033[0m       : Cortical morphology analysis (Thickness and curvature)
 \t\t\t      ( Requires: -proc_freesurfer and -post_structural )
 
-   Flags for fourth stage, the modified connectomes:
+   Flags for fourth stage, connectomes processing:
 \t\033[38;5;197m-proc_COMMIT\033[0m      : Tract-specific processing and connectome generation
 \t\t\t      ( Requires: -proc_dwi, -post_structural and -SC )
 
@@ -63,6 +63,7 @@ echo -e "
 \t\033[38;5;197m-post_structural\033[0m
 \t\t\033[38;5;120m-atlas\033[0m               : Registers only the selected the parcellations separated by a comma, no blank spaces (eg. economo,aparc).
 \t\t\t\t        ( default is the 18 parcellations provided in the pipeline )
+\t\t\033[38;5;120m-gpip\033[0m               :  Include subject-specific rsFC parcellations (i.e. GPIPs)
 
 \t\033[38;5;197m-proc_dwi\033[0m
 \t\t\033[38;5;120m-dwi_main\033[0m            : Full path to DWI with N number of directions and b0. If used, it will overwrite the defaults.
@@ -101,7 +102,7 @@ echo -e "
 
 \t\t\033[38;5;120m-smoothWithWB\033[0m        : Specify this option to use workbench tools for surface-based smoothing (more memory intensive)
 \t\t\t\t         ( default = smoothing is performed with freesurfer tools: mri_surf2surf )
-\t\t\033[38;5;120m-NSR\033[0m      : Specify this option to perform white matter and CSF signal regression of timeseries
+\t\t\033[38;5;120m-NSR\033[0m                 : Specify this option to perform white matter and CSF signal regression of timeseries
 \t\t\t\t         ( default = no white matter and CSF signal regression )
 \t\t\033[38;5;120m-GSR\033[0m                 : Specify this option to perform global, white matter and CSF signal regression of timeseries
 \t\t\t\t         ( default = no global, white matter and CSF signal regression )
@@ -124,8 +125,9 @@ echo -e "
 \t\t\033[38;5;120m-tracts <numeric>\033[0m    : Number of streamlines, where 'M' stands for millions (default=40M)
 \t\t\033[38;5;120m-keep_tck\033[0m            : If provided, the tractogram will be copied to '<output>/micapipe/<subject>/dwi'
 \t\t\033[38;5;120m-autoTract\033[0m           : Automatic tractogram segmentation (This is an optional procedure)
-\t\t\033[38;5;120m-filter\033[0m              : Algorithm for tractogram filtering ( default = 'SIFT2', other option: 'COMMIT2', 'both')
-\t\t\t\t         (COMMIT2 option is required if running proc_COMMIT after) 
+\t\t\033[38;5;120m-filter\033[0m              : Algorithm for tractogram filtering ( options: SIFT2, COMMIT, COMMIT2)
+\t\t\t\t         (If there are multiple filters, put all of them in a single argument! e.g., -filter 'SIFT2 COMMIT') 
+\t\t\t\t         (COMMIT or COMMIT2 option is required if running proc_COMMIT after) 
 \t\t\033[38;5;120m-reg_lambda\033[0m          : Regularization parameter lambda required for COMMIT2
 \t\t\033[38;5;120m-tractometry\033[0m         : Option to perform tractometry using the generated tractogram 
 \t\t\t\t         (If there are multiple images, put all of them in a single argument! e.g., -tractometry 'image1 image2 image3') 
@@ -236,6 +238,10 @@ do
   ;;
   -m|-mask)
     mask=$2
+    shift;shift
+  ;;
+  -gpip)
+    gpip=$2
     shift;shift
   ;;
   -proc_freesurfer)
@@ -612,7 +618,7 @@ if [ -z ${autoTract} ]; then autoTract=FALSE; else autoTract=TRUE; fi
 if [ -z ${keep_tck} ]; then keep_tck=FALSE; else keep_tck=TRUE; fi
 if [ -z ${tractometry} ]; then tractometry=FALSE; else tractometry=TRUE; fi
 if [ -z ${reg_lambda} ]; then reg_lambda=FALSE; else reg_lambda=$reg_lambda_input; fi
-if [ -z ${filter} ]; then filter="SIFT2"; else filter=$filter_input; fi
+if [ -z ${filter} ]; then filter=FALSE; else filter=TRUE; fi
 
 # Optional arguments proc_COMMIT
 if [ -z ${MVFalpha_list} ]; then MVFalpha_list=FALSE; else MVFalpha_list=$MVFalpha_list_input; fi
@@ -680,6 +686,9 @@ if [ -z ${hires} ]; then hires="FALSE"; else hires="TRUE"; fi
 
 # Altas selection (DEFAULT is the 18 of micapipe)
 if [ -z ${atlas} ]; then atlas=DEFAULT; else atlas="$atlas"; fi
+
+# GPIP 
+# if [ -z ${gpip} ]; then gpip=${gpip}; else gpip="FALSE"; fi
 
 # T1w image to process (DEFAULT is *T1w.nii*)
 if [ -z ${t1wStr} ]; then t1wStr=DEFAULT; else t1wStr="$t1wStr"; fi
@@ -853,7 +862,7 @@ fi
 #     REQUIRES -proc_structural and -proc_freesurfer
 if [ "$ALL" = "TRUE" ] || [ "$postVOL" = "TRUE" ]; then
     log_file_str=$dir_logs/post_structural_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/02_post-structural.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $atlas"
+    COMMAND="${scriptDir}/02_post-structural.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $atlas $gpip"
     # mica.q - POST Structural processing
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - POST Structural processing"
@@ -985,7 +994,7 @@ if [ "$ALL" = "TRUE" ] || [ "$postDWI" = "TRUE" ]; then
         export PROC="qsub-MICA"
         # Info "Setting a warper to run on mica.q"
         qsub -q mica.q -pe smp 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
-             $COMMAND "$tractometry_input" $PROC
+             $COMMAND "${filter_input}" "$tractometry_input" $PROC
     # all.q - post-DWI processing (tractography)
     elif [[ $qall == "TRUE" ]]; then
         Info "all.q qsub - POST DWI processing (tractography)"
@@ -993,10 +1002,10 @@ if [ "$ALL" = "TRUE" ] || [ "$postDWI" = "TRUE" ]; then
         export PROC="qsub-all.q"
         # Info "Setting a warper to run on all.q"
         qsub -q all.q -pe all.pe 20-40 -l h_vmem=35G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
-             $COMMAND "$tractometry_input" $PROC
+             $COMMAND "${filter_input}" "$tractometry_input" $PROC
     else
         # LOCAL - post-DWI processing (tractography)
-        $COMMAND "$tractometry_input" $PROC 2>&1 | tee -a ${log_file_str}.txt
+        $COMMAND "${filter_input}" "$tractometry_input" $PROC 2>&1 | tee -a ${log_file_str}.txt
     fi
 fi
 
