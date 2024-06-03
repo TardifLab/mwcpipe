@@ -7,3 +7,5 @@ functions/__pycache__/
 
 # My additions
 tardiflab/output/
+tardiflab/scripts/01_processing/scilpy/
+

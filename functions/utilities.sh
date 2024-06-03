@@ -106,6 +106,7 @@ export idBIDS="${subject}${ses}"
 
   # BIDS Files
   bids_T1ws=($(ls "$subject_bids"/anat/*acq-filtered_T1w.nii* 2>/dev/null))
+  bids_T2ws=($(ls "$subject_bids"/anat/*acq-space_T2w.nii* 2>/dev/null))
   bids_dwis=($(ls "${subject_bids}/dwi/${subject}${ses}"*dwi.nii* 2>/dev/null))
 #  bids_T1map=$(ls "$subject_bids"/anat/*MP2RAGE*.nii* 2>/dev/null)
   bids_T1map=$(ls "$subject_siemens"/anat/*T1map.nii* 2>/dev/null)

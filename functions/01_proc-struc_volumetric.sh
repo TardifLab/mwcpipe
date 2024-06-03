@@ -24,6 +24,7 @@ threads=$6
 tmpDir=$7
 t1wStr=$8
 PROC=$9
+mask=${10}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -134,7 +135,11 @@ if [ ! -f "${proc_struct}/${T1str_nat}".nii.gz ] || [ ! -f "${proc_struct}/${T1s
     if [ ! -f "$T1nativepro" ]; then Error "$T1str_nat was not generated"; Do_cmd exit; fi
 
     # Brainmask
-    Do_cmd bet "$T1nativepro" "$T1nativepro_brain" -B -f 0.25 -v
+    if [ "$mask" = mri_synth_strip ]; then
+        Do_cmd mri_synth_strip -i "$T1nativepro" -o "$T1nativepro_brain"
+    else
+        Do_cmd bet "$T1nativepro" "$T1nativepro_brain" -B -f 0.25 -v
+    fi
 
     # If no T1native pro exit_status "something is wrong" exit
     if [ ! -f "$T1nativepro_brain" ]; then Error "$T1str_nat masked was not generated"; Do_cmd exit; else ((Nsteps++)); fi

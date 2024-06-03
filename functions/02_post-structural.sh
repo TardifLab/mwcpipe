@@ -23,7 +23,8 @@ nocleanup=$5
 threads=$6
 tmpDir=$7
 atlas=$8
-PROC=$9
+gpip=${9}
+PROC=${10}
 export OMP_NUM_THREADS=$threads
 here=$(pwd)
 
@@ -39,7 +40,27 @@ source $MICAPIPE/functions/utilities.sh
 
 # Assigns variables names
 bids_variables "$BIDS" "$id" "$out" "$SES"
+#------------------------------------------------------------------------------#
+# If using subject-specific rsFC parcellations (i.e. GPIPs), use a personal atlas directory and copy in GPIPs
+if [[ "$gpip" == "gpip" ]]; then
+    # Copy over subject's freesurfer data from LBC server if it is not already in my directory
+    if [[ ! -e /data_/tardiflab/danielos/PAD_input/derivatives/freesurfer/${idBIDS} ]]; then
+        cp -r /lbc/lbc1/PREVENT_AD/derivatives/freesurfer/${idBIDS} /data_/tardiflab/danielos/PAD_input/derivatives/freesurfer
+    fi
 
+    # Redefine parcelations directory as personal atlas directory 
+    util_parcelations=/data_/tardiflab/danielos/PAD_input/parcellations
+    cp /data_/tardiflab/danielos/PAD_input/gpip2native/${subject}_native/${SES}/* ${util_parcelations}
+
+    # Rename GPIPs in accordance with system used for other atlases (i.e. add '_mics' before .annot extension)
+    for file in ${util_parcelations}/*${subject}*;do
+        base_name=${file%.annot}
+        new_name="${base_name}_${SES}_mics.annot"
+        mv "$file" "${new_name}"
+    done
+fi
+
+#------------------------------------------------------------------------------#
 # Manage manual inputs: Parcellations
 cd "$util_parcelations"
 if [[ "$atlas" == "DEFAULT" ]]; then
@@ -167,7 +188,7 @@ for parc in "${atlas_parc[@]}"; do
         fs_mgz="${tmp}/${parc_str}.mgz"
         fs_tmp="${tmp}/${parc_str}_in_T1.mgz"
         fs_nii="${tmp}/${T1str_fs}_${parc_str}.nii.gz"                   # labels in fsnative tmp dir
-        labels_nativepro="${dir_volum}/${T1str_nat}-${parc_str}.nii.gz"  # lables in nativepro
+        labels_nativepro="${dir_volum}/${T1str_nat}-${parc_str}.nii.gz"  # labels in nativepro
 
         # Register the annot surface parcelation to the T1-freesurfer volume
         Do_cmd mri_aparc2aseg --s "$idBIDS" --o "$fs_mgz" --annot "${parc_annot/.annot/}" --new-ribbon
@@ -217,6 +238,11 @@ else
 fi
 
 # -----------------------------------------------------------------------------------------------
+# If GPIP flag was specified, remove parcels from personal atlas directory now that processing is complete
+if [[ "$gpip" == "gpip" ]]; then
+    rm ${util_parcelations}/*${subject}*${SES}*
+fi
+
 # QC notification of completition
 lopuu=$(date +%s)
 eri=$(echo "$lopuu - $aloita" | bc)

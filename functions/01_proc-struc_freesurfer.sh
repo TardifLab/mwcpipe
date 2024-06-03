@@ -126,10 +126,17 @@ elif [[ "$FSdir" == "FALSE" ]]; then
             else  Do_cmd cp "$t1" "$tmp/nii/"
             fi
         done
-
+        
         # List of Files for processing
         fs_cmd=$(echo "-i $(echo "$tmp"/nii/*nii | sed 's: : -i :g')")
-        Do_cmd recon-all -cm -all "$fs_cmd" -s "$idBIDS"
+#        Do_cmd recon-all -s "$idBIDS" "$fs_cmd" -cm -all
+        if [ -f $bids_T1ws ] && [ -f $bids_T2ws ]; then
+           echo "Found T2w image for ${idBIDS}. Will use it to improve pial surface."        
+            Do_cmd recon-all -s "$idBIDS" "$fs_cmd" -T2 $bids_T2ws -cm -T2pial -all 
+        elif [ -f $bids_T1ws ] && [ ! -f $bids_T2ws ]; then   
+            echo "No T2w image found for ${idBIDS}. Running recon-all with T1w image only." 
+            Do_cmd recon-all -s "$idBIDS" "$fs_cmd" -cm -all
+        fi
     fi
 
     # Copy the recon-all log to our MICA-log Directory
