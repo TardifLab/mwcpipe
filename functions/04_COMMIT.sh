@@ -31,9 +31,10 @@ Dual_MTON=${13}
 Dual_MTOFF=${14}
 Dual_bvals=${15}
 Dual_bvecs=${16}
-tractometry=${17} 
-tractometry_input=${18}
-PROC=${19}
+tractometry=${17}
+tck_imaging=${18}
+tractometry_input=${19}
+PROC=${20}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -820,27 +821,24 @@ if [[ ${tractometry}  == "TRUE" ]]; then
 fi
 
 
+if [[ ${tck_imaging}  == "TRUE"  ]]; then
 
-<<comment
+    mkdir ${proc_dwi}/roi_image
 
-This is to make some figures.... might move to 04_COMMIT - Wen Da
-
-mkdir ${proc_dwi}/roi_image
-
-        Info "Getting DK85 parcellation for COMMIT2"
-        # Converting aparc+aseg parcellation  
-        Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
-        Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
-        # Getting necessary files for labelsgmfix
-        Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
-        Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
-        Do_cmd fslmaths $tmp/T1_brain_mask_FS.nii.gz -bin $tmp/T1_brain_mask_FS.nii.gz
-        Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
-        # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
-        SGE_ROOT= 
-        Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
-        # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
-        SGE_ROOT=/opt/sge
+    Info "Getting tck parcels"
+    # Converting aparc+aseg parcellation  
+    Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
+    Do_cmd labelconvert $tmp/aparc+aseg.nii.gz $FREESURFER_HOME/FreeSurferColorLUT.txt $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes.nii.gz
+    # Getting necessary files for labelsgmfix
+    Do_cmd mri_convert ${dir_freesurfer}/mri/brain.mgz $tmp/T1_brain_mask_FS.nii.gz --out_orientation LAS
+    Do_cmd mri_convert ${dir_freesurfer}/mri/orig_nu.mgz $tmp/T1_nucorr_FS.nii.gz --out_orientation LAS
+    Do_cmd fslmaths $tmp/T1_brain_mask_FS.nii.gz -bin $tmp/T1_brain_mask_FS.nii.gz
+    Do_cmd fslmaths $tmp/T1_nucorr_FS.nii.gz -mul $tmp/T1_brain_mask_FS.nii.gz $tmp/T1_brain_FS.nii.gz
+    # TEMPORARILY SET SUN GRID ENGINE (SGE_ROOT) ENV VARIABLE EMPTY TO OVERCOME LABELSGMFIX HANGING
+    SGE_ROOT= 
+    Do_cmd labelsgmfix $tmp/nodes.nii.gz $tmp/T1_brain_FS.nii.gz $mrtrixDir/share/mrtrix3/labelconvert/fs_default_Bstem.txt $tmp/nodes_fixSGM.nii.gz -sgm_amyg_hipp -premasked
+    # RESTORE SGE_ROOT TO CURRENT VALUE... MIGHT NEED TO BE MODIFIED
+    SGE_ROOT=/opt/sge
 
     Do_cmd mri_convert ${dir_freesurfer}/mri/brainstemSsLabels.v12.FSvoxelSpace.mgz $tmp/T1_brain_FS_bstem.nii.gz --out_orientation LAS
     Do_cmd fslmaths $tmp/nodes_fixSGM.nii.gz -uthr 85 -thr 85 -binv $tmp/T1_brain_FS_bstem_binv.nii.gz
@@ -851,34 +849,23 @@ mkdir ${proc_dwi}/roi_image
     Do_cmd fslmaths $tmp/T1_brain_FS_medulla.nii.gz -mul 85 $tmp/T1_brain_FS_medulla.nii.gz
     Do_cmd fslmaths $tmp/aparc+aseg_FS_nobstem.nii.gz -add $tmp/T1_brain_FS_medulla.nii.gz $tmp/nodes_fixSGM.nii.gz
 
-        # Move parcel from T1 space to diffusion space
-        t1_fs_str="${tmp}/${idBIDS}_fs_to-nativepro_mode-image_desc_"
-        t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
-        Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
-        Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v 
+    # Move parcel from T1 space to diffusion space
+    t1_fs_str="${tmp}/${idBIDS}_fs_to-nativepro_mode-image_desc_"
+    t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
+    Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
+    Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v 
 
-Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/AVF.txt -tck_weights_in ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered_volume.txt -symmetric -force
+    Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/AVF.txt -tck_weights_in ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered_volume.txt -symmetric -force
+    Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/MVF.txt -tck_weights_in ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-filtered_volume.txt -symmetric -force
+    Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz  ${proc_dwi}/roi_image/tracto.txt -scale_file ${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap_track_weight.csv -stat_edge mean -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/tract_assignments.txt
 
-Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/MVF.txt -tck_weights_in ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-filtered_volume.txt -symmetric -force
+    matlab -nodisplay -r "MVF = dlmread('${proc_dwi}/roi_image/MVF.txt'); AVF = dlmread('${proc_dwi}/roi_image/AVF.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${proc_dwi}/roi_image/gratio.txt', 'gratio', '-ASCII'); exit"
 
-Do_cmd tck2connectome ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz  ${proc_dwi}/roi_image/tracto.txt -scale_file ${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap_track_weight.csv -stat_edge mean -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/tract_assignments.txt
+    Do_cmd connectome2tck ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck /${proc_dwi}/roi_image/tract_assignments.txt ${proc_dwi}/roi_image/filt.tck -files single -nodes 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85 -exclusive
 
-matlab -nodisplay -r "MVF = dlmread('${proc_dwi}/roi_image/MVF.txt'); AVF = dlmread('${proc_dwi}/roi_image/AVF.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${proc_dwi}/roi_image/gratio.txt', 'gratio', '-ASCII'); exit"
+    Do_cmd tck2connectome ${proc_dwi}/roi_image/filt.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/nos.txt -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/filt_tract_assignments.txt  
 
-
-
-connectome2tck ${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT2-MySD-COMMIT-filtered.tck /${proc_dwi}/roi_image/tract_assignments.txt ${proc_dwi}/roi_image/filt.tck -files single -nodes 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85 -exclusive
-
-tck2connectome ${proc_dwi}/roi_image/filt.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/nos.txt -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/filt_tract_assignments.txt  
-
-
-
-exit
-
-comment
-
-
-
+fi
 
 # -----------------------------------------------------------------------------------------------
 # QC notification of completition

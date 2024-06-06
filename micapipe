@@ -63,7 +63,7 @@ echo -e "
 \t\033[38;5;197m-post_structural\033[0m
 \t\t\033[38;5;120m-atlas\033[0m               : Registers only the selected the parcellations separated by a comma, no blank spaces (eg. economo,aparc).
 \t\t\t\t        ( default is the 18 parcellations provided in the pipeline )
-\t\t\033[38;5;120m-gpip\033[0m               :  Include subject-specific rsFC parcellations (i.e. GPIPs)
+\t\t\033[38;5;120m-other_parcels\033[0m               :  Include other parcellations which are not found in the main parcellations directory (e.g. GPIPs)
 
 \t\033[38;5;197m-proc_dwi\033[0m
 \t\t\033[38;5;120m-dwi_main\033[0m            : Full path to DWI with N number of directions and b0. If used, it will overwrite the defaults.
@@ -145,6 +145,8 @@ echo -e "
 \t\t\033[38;5;120m-Dual_bvecs\033[0m          : Dual encoded MT-DWI b-vectors
 \t\t\033[38;5;120m-tractometry\033[0m         : Option to perform tractometry using the filtered tractogram 
 \t\t\t\t         (If there are multiple images, put all of them in a single argument! e.g., -tractometry 'image1 image2 image3') 
+\t\t\033[38;5;120m-tck_imaging\033[0m         : Option to create files used for tck imaging (to be expanded) 
+
 \t\033[38;5;197m-MPC\033[0m
 \t\t\033[38;5;120m-microstructural_img\033[0m : Path to scan on which MPC will be performed ( ./img.nii.gz )
 \t\t\t\t         If left blank or omitted, defaults to using qT1 identified through BIDS directory structure
@@ -240,8 +242,8 @@ do
     mask=$2
     shift;shift
   ;;
-  -gpip)
-    gpip=$2
+  -other_parcels)
+    other_parcels=$2
     shift;shift
   ;;
   -proc_freesurfer)
@@ -422,6 +424,10 @@ do
   -Dual_bvecs)
     Dual_bvecs=$2
     shift;shift
+  ;;
+  -tck_imaging)
+    tck_imaging=TRUE
+    shift
   ;;
   -MPC)
     postMPC=TRUE
@@ -632,6 +638,7 @@ fi
 if [ -z ${Dual_bvals} ]; then Dual_bvals=FALSE; else Dual_bvals=$Dual_bvals; fi
 if [ -z ${Dual_bvecs} ]; then Dual_bvecs=FALSE; else Dual_bvecs=$Dual_bvecs; fi
 if [ -z ${MTsat_DWI} ]; then MTsat_DWI=FALSE; else MTsat_DWI=$MTsat_DWI_input; fi
+if [ -z ${tck_imaging} ]; then tck_imaging=FALSE; else tck_imaging=TRUE; fi
 
 # Optional arguments proc_dwi
 # User provided DWI main phase
@@ -686,9 +693,6 @@ if [ -z ${hires} ]; then hires="FALSE"; else hires="TRUE"; fi
 
 # Altas selection (DEFAULT is the 18 of micapipe)
 if [ -z ${atlas} ]; then atlas=DEFAULT; else atlas="$atlas"; fi
-
-# GPIP 
-# if [ -z ${gpip} ]; then gpip=${gpip}; else gpip="FALSE"; fi
 
 # T1w image to process (DEFAULT is *T1w.nii*)
 if [ -z ${t1wStr} ]; then t1wStr=DEFAULT; else t1wStr="$t1wStr"; fi
@@ -862,7 +866,7 @@ fi
 #     REQUIRES -proc_structural and -proc_freesurfer
 if [ "$ALL" = "TRUE" ] || [ "$postVOL" = "TRUE" ]; then
     log_file_str=$dir_logs/post_structural_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/02_post-structural.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $atlas $gpip"
+    COMMAND="${scriptDir}/02_post-structural.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $atlas $other_parcels"
     # mica.q - POST Structural processing
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - POST Structural processing"
@@ -1015,7 +1019,7 @@ fi
 #   REQUIRES -proc_dwi 
 if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
     log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $gratiotractometry $MTsat_DWI $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry"
+    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $gratiotractometry $MTsat_DWI $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry $tck_imaging"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Tract-specific processing (COMMIT)"
