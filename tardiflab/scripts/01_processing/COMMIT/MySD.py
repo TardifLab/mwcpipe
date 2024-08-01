@@ -21,14 +21,12 @@ commit.core.setup()       # precomputes the rotation matrices used internally by
 ID          = sys.argv[1]
 in_dir   	= sys.argv[2]
 tmp_dir     = sys.argv[3]
-tractogram  = sys.argv[4]
-mtsat       = sys.argv[5]
+dict_dir    = sys.argv[4]
+tractogram  = sys.argv[5]
+qmap        = sys.argv[6]
 
 print(".\n *** Initializing COMMIT for: ", ID)
 print(".\n *** Tractogram: ", tractogram)
-
-# Dirs
-dict_dir        = in_dir + "/MySD"
 
 # Files
 wm_mask        	= tmp_dir + "/" + ID  + "_dwi_wm_mask.nii.gz"
@@ -45,8 +43,7 @@ trk2dictionary.run(
 mit = commit.Evaluation()
 mit.set_config('doNormalizeSignal', False)
 
-mit.load_data( mtsat, None )
-
+mit.load_data( qmap, None )
 
 # Set model and generate the kernel
 mit.set_model( 'VolumeFractions' )

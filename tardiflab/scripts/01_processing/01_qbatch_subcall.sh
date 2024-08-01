@@ -39,8 +39,8 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 
 <<comment
 # Session-1
-  for SUB in {02..17} 19 28 30; do
-#  for SUB in 15 ; do
+#  for SUB in {02..17} 19 28 30; do
+  for SUB in 17 ; do
 
 	ID=sub-"${SUB}"
 	sub_dir="${log_func_dir}/${ID}_ses-1"
@@ -51,8 +51,8 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 #	qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" ${script} $SUB $FUNC_ID "1" 				# Standard call
 	qbatch -q all.q -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"	# option to gauge resource allocation
   done
-
 comment
+
 # Session-1
   for SUB in 18 {20..27} 29 ; do
 

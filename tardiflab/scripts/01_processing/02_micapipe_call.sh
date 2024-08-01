@@ -58,7 +58,7 @@ elif [ "$2" == SC ] ; then
               	-bids $RAW_DIR \
               	-ses $SESSION \
         		-tracts 3M \
-                -filter COMMIT2 \
+                -filter COMMIT \
                 -reg_lambda 15e-1 \
               	-tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii" \
               	-SC
@@ -75,12 +75,13 @@ elif [ "$2" == proc_COMMIT ] ; then
                 -gratiotractometry \
 		        -MVFalpha_list $MVFlist \
                 -tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii ${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_R1map.nii.gz" \
+                -tck_imaging \
                 -proc_COMMIT
 
 #                -Dual_MTON "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi_MT_on_dn_dw_db.nii.gz" \
 #                -Dual_MTOFF "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi_MT_off_dn_dw_db.nii.gz" \
-#                -Dual_bvals "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi.bvals" \
-#                -Dual_bvecs "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi.bvecs" \
+#                -Dual_bvals "/data_/tardiflab/mwc/hc${1}r/Diffusion/dwi_preproc.bvals" \
+#                -Dual_bvecs "/data_/tardiflab/mwc/hc${1}r/Diffusion/dwi_preproc.bvecs" \
 
 #                -MTsat_DWI "${OUT_DIR}/micapipe/sub-${1}/${SESSION}/dwi/sub-${1}_${SESSION}_space-dwi_desc-MTsat_SyN.nii.gz" \
 #		        -gratio \

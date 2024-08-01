@@ -26,7 +26,7 @@ print(".\n *** Initializing COMMIT for: ", ID)
 print(".\n *** Lambda value: ", reg_lambda)
 
 # Dirs
-commit_dir      = in_dir + "/COMMIT2"
+commit_dir      = in_dir + "/COMMIT2_init"
 dict_dir        = commit_dir + "/dict"
 
 # Files

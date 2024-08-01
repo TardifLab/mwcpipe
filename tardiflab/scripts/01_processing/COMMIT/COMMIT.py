@@ -20,13 +20,13 @@ import amico
 ID          = sys.argv[1]
 in_dir   	= sys.argv[2]
 tmp_dir     = sys.argv[3]
-tractogram  = sys.argv[4]
+out_dir     = sys.argv[4]
+tractogram  = sys.argv[5]
 
 print(".\n *** Initializing COMMIT for: ", ID)
 
 # Dirs
-commit_dir      = in_dir + "/COMMIT"
-dict_dir        = commit_dir + "/dict"
+dict_dir        = out_dir + "/dict"
 
 # Files
 dwi_b0 	    	= in_dir + "/" + ID + "_space-dwi_desc-b0.nii.gz"
@@ -53,7 +53,7 @@ trk2dictionary.run(
 
 # load data
 amico.util.fsl2scheme( bvals, bvecs, scheme )
-mit = commit.Evaluation( commit_dir, '.' )                                              # study_path, subject (relative to study_path)
+mit = commit.Evaluation( out_dir, '.' )                                              # study_path, subject (relative to study_path)
 mit.load_data(
         dwi_filename    = dwi_corr,
         scheme_filename = scheme

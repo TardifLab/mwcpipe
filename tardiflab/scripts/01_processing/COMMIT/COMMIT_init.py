@@ -25,7 +25,7 @@ tractogram  = sys.argv[4]
 print(".\n *** Initializing COMMIT for: ", ID)
 
 # Dirs
-commit_dir      = in_dir + "/COMMIT2"
+commit_dir      = in_dir + "/COMMIT_init"
 dict_dir        = commit_dir + "/dict"
 
 # Files
