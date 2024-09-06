@@ -105,8 +105,8 @@ export idBIDS="${subject}${ses}"
   export icafixTraining=${MICAPIPE}/functions/MICAMTL_training_15HC_15PX.RData                 			# ICA-FIX training file default
 
   # BIDS Files
-  bids_T1ws=($(ls "$subject_bids"/anat/*acq-filtered_T1w.nii* 2>/dev/null))
-  bids_T2ws=($(ls "$subject_bids"/anat/*acq-space_T2w.nii* 2>/dev/null))
+  bids_T1ws=($(ls "$subject_bids"/anat/*T1w.nii* 2>/dev/null))
+  bids_T2ws=($(ls "$subject_bids"/anat/*T2w.nii* 2>/dev/null))
   bids_dwis=($(ls "${subject_bids}/dwi/${subject}${ses}"*dwi.nii* 2>/dev/null))
 #  bids_T1map=$(ls "$subject_bids"/anat/*MP2RAGE*.nii* 2>/dev/null)
   bids_T1map=$(ls "$subject_siemens"/anat/*T1map.nii* 2>/dev/null)
@@ -116,7 +116,8 @@ export idBIDS="${subject}${ses}"
   bids_unit1ds=$(ls "$subject_siemens"/anat/*acq-denoised_UNIT1.nii* 2>/dev/null)
 
   bids_flair=$(ls "$subject_bids"/anat/*FLAIR*.nii* 2>/dev/null)
-  dwi_reverse=($(ls "${subject_bids}/fmap/${subject}${ses}"_dir-PA_*epi.nii* 2>/dev/null))
+  dwi_reverse=($(ls "${subject_bids}/fmap/${subject}${ses}"_{dir-PA_*,acq-dwi}*epi.nii* 2>/dev/null))
+#  dwi_reverse=($(ls "${subject_bids}/fmap/${subject}${ses}"_dir-PA_*epi.nii* 2>/dev/null))
 }
 
 bids_print.variables() {
