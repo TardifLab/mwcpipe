@@ -63,6 +63,19 @@ elif [ "$2" == SC ] ; then
               	-tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii" \
               	-SC
 
+elif [ "$2" == pre_COMMIT ] ; then
+      # Setting up for COMMIT processing
+   	${MICAPIPE}/micapipe \
+              	-sub $1 \
+              	-out $OUT_DIR \
+              	-bids $RAW_DIR \
+              	-ses $SESSION \
+              	-MTsat "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii" \
+              	-MVFalpha_list $MVFlist \
+              	-gratio \
+              	-gratiotractometry \
+              	-pre_COMMIT
+
 elif [ "$2" == proc_COMMIT ] ; then
       # tract-specific MySD/COMMIT/gratio processing
         ${MICAPIPE}/micapipe \
@@ -70,7 +83,7 @@ elif [ "$2" == proc_COMMIT ] ; then
                 -out $OUT_DIR \
                 -bids $RAW_DIR \
                 -ses $SESSION \
-                -MTsat_DWI "${OUT_DIR}/micapipe/sub-${1}/${SESSION}/dwi/sub-${1}_${SESSION}_space-dwi_desc-MTsat_SyN.nii.gz" \
+                -MTsat "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii" \
 		        -gratio \
                 -gratiotractometry \
 		        -MVFalpha_list $MVFlist \
@@ -88,6 +101,7 @@ elif [ "$2" == proc_COMMIT ] ; then
 #                -gratiotractometry \
 #		        -MVFalpha_list $MVFlist \
 #                -tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii ${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_R1map.nii.gz" \
+#                -tck_imaging \
 
 elif [ "$2" == FC ] ; then
       # resting state fMRI & FC processing
