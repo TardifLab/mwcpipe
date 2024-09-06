@@ -48,12 +48,14 @@ trk2dictionary.run(
         TCK_ref_image           = dwi_b0,
         path_out                = dict_dir,
         fiber_shift             = 0.5,
-        peaks_use_affine        = True
+        peaks_use_affine        = True,
+        verbose                 = 2
 )
 
 # load data
 amico.util.fsl2scheme( bvals, bvecs, scheme )
 mit = commit.Evaluation( out_dir, '.' )                                              # study_path, subject (relative to study_path)
+mit.set_config('doNormalizeSignal', False)
 mit.load_data(
         dwi_filename    = dwi_corr,
         scheme_filename = scheme

@@ -25,8 +25,8 @@ tmpDir=$7
 MVFalpha_list=$8
 MySD=$9
 gratio=${10}
-gratiotractometry=${11}
-MTsat_in_dwi=${12}
+MTsat=${11}
+gratiotractometry=${12}
 Dual_MTON=${13}
 Dual_MTOFF=${14}
 Dual_bvals=${15}
@@ -67,10 +67,13 @@ tck_json=${proc_dwi}/${idBIDS}_space-dwi_desc-*_tractography.json
 tracts=($(cat $tck_json | grep -oP '(?<="SeedingNumberMethod": ")[^"]*')) ### Could use jq in the future, but json file has a small bug
 
 # Check inputs
+MTsat_in_dwi="${proc_dwi}/${idBIDS}_space-dwi_desc-SyN_MTsat.nii.gz"
+MTsat2T1w_str="${dir_warp}/${idBIDS}_MTsat_to-nativepro_mode-image_desc-affine_"
+MTsat2T1w_affine="${MTsat2T1w_str}0GenericAffine.mat"
 if [ ! -f $dwi_b0  ]; then Error "Subject $id doesn't have b0 image:\n\t\tRUN -proc_dwi"; exit; fi
 if [[ ! -f $MVFalpha_list  ]] && [[ $MySD == "TRUE" || $gratio == "TRUE" ]]; then Warning "Subject $id has an alpha value to compute MVF from MTsat"; fi
-if [[ ! -f $MTsat_in_dwi  ]] && [[ $MySD == "TRUE" || $gratio == "TRUE" ]]; then Error "Subject $id doesn't have a MTsat image registered in DWI space:\n\t\tRUN -SC with -tractometry"; exit; fi
-
+if [[ ! -f $MTsat_in_dwi  ]] && [[ $MySD == "TRUE" || $gratio == "TRUE" || $gratiotractometry == "TRUE" ]]; then Error "Subject $id doesn't have a MTsat image registered in DWI space:\n\t\tRUN -pre_COMMIT"; exit; fi
+if [[ ! -f $MTsat2T1w_affine  ]] && [[ $MySD == "TRUE" || $gratio == "TRUE" || $gratiotractometry == "TRUE" ]]; then Error "Subject $id doesn't have a MTsat to DWI space registration:\n\t\tRUN -pre_COMMIT"; exit; fi
 #------------------------------------------------------------------------------#
 Title "\tTract-specific processing\n\t\tmicapipe $Version, $PROC"
 micapipe_software
@@ -80,138 +83,50 @@ aloita=$(date +%s)
 Nparc=0
 
 # Create script specific temp directory
-tmpDir=/data/tardiflab2/wenda/tmp
-tmp=${tmpDir}/04_COMMIT/${subject}/${SES}
+tmp=${tmpDir}/04_proc-COMMIT/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
 trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
 
 # -----------------------------------------------------------------------------------------------
-# Calibrating g-ratio through COMMIT
-alpha=${tmpDir}/04_COMMIT/alpha.txt
-MVF_COMMIT_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-MVF-COMMIT.nii.gz
-
+# Calibrating MVF map through COMMIT and NODDI, assuming a g-ratio of 0.7 at the splenium
+alpha_COMMIT=${tmpDir}/04_proc-COMMIT/alpha_calibration_COMMIT.txt
+MVF_COMMIT_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-MTsatCOMMITcalib_MVF.nii.gz
 if [[ ${MySD}  == "TRUE" || ${gratio}  == "TRUE" ]] && [[ ! -f "$MVF_COMMIT_in_dwi" ]]; then
-
-    if [[ ! -f "$alpha" ]]; then
-        
+    if [[ ! -f "$alpha_COMMIT" ]]; then
         Info "Calculating alpha for MTsat to MVF scaling"
-        if [[ ! -d "${tmpDir}/MVF_calc" ]]; then
-            Do_cmd mkdir ${tmpDir}/MVF_calc
-            cat $MVFalpha_list|while read line; do
-                IFS='_' read -r -a array <<< "${line}"
-                alpha_sub="${array[0]}"
-                alpha_ses="${array[1]}"
-                Do_cmd antsApplyTransforms -d 3 -n NearestNeighbor \
-                       -i "${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts/splenium.nii.gz" \
-                       -r "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-t1w_nativepro_SyN.nii.gz" \
-                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_1Warp.nii.gz" \
-                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_0GenericAffine.mat" \
-                       -t ["$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
-                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
-                       -o "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz"
-                Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsat_SyN.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
-                Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/COMMIT_init/dict/Results_StickZeppelinBall_AdvancedSolvers/compartment_IC.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
-                Do_cmd fslmaths "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_model-DTI_map-FA.nii.gz" -nan "${tmpDir}/MVF_calc/${alpha_sub}_${alpha_ses}_space-dwi_FA_MNI152_1mm_splenium.nii.gz"
-            done
-            matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alpha('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_COMMIT/alpha.txt', 'alpha', '-ASCII'); exit"
+        if [[ ! -d "${tmpDir}/MVF_calc_running" ]]; then
+            mkdir ${tmpDir}/MVF_calc_running
+            matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alpha('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_proc-COMMIT/alpha_calibration_COMMIT.txt', 'alpha', '-ASCII'); exit"
             Do_cmd rm -r ${tmpDir}/MVF_calc
-        else
-            until [ -f $alpha ]; do Info "Alpha computation for MTsat to MVF scaling is already in progress, waiting 10 min for it to finish"; sleep 10m; done
-
+            Do_cmd rm ${tmpDir}/MVF_calc_running
         fi
     fi
-
-    alpha_value=$(cat $alpha)
-    Do_cmd fslmaths $MTsat_in_dwi -mul $alpha_value $MVF_COMMIT_in_dwi
-
-else
-    Info "MTsat was already scaled to MVF"
 fi
 
-# -----------------------------------------------------------------------------------------------
-# Calibrating g-ratio through NODDI - voxel wise
-
-if [[ "$gratiotractometry" == "TRUE" ]]; then
-
-    alpha_NODDI=${tmpDir}/04_COMMIT/alpha_NODDI.txt
-
-    NODDI_dir="${proc_dwi}/NODDI_AMICO"
-    NODDI_NDI=$NODDI_dir/AMICO/NODDI/fit_NDI_up.nii.gz
-    dwi_COR="${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc.mif"
-    dwi_COR_nii="${tmp}/${idBIDS}_space-dwi_desc-dwi_preproc.nii.gz"
-    dwi_COR_mask="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
-    bvecs=${tmp}/${idBIDS}_bvecs.txt 
-    bvals=${tmp}/${idBIDS}_bvals.txt
-
-    if [[ ! -f "$NODDI_NDI" ]]; then
-        Info "Calculating NODDI metrics"
-        AMICO_py=${MICAPIPE}/tardiflab/scripts/01_processing/AMICO/NODDI.py
-        dwi_mif=${proc_dwi}/${idBIDS}_space-dwi_desc-dwi_preproc.mif
-        dwi_nii=${tmp}/${idBIDS}_dwi.nii.gz
-        bvecs=${tmp}/${idBIDS}_bvecs.txt
-        bvals=${tmp}/${idBIDS}_bvals.txt
-     	Do_cmd mrconvert $dwi_mif -export_grad_fsl $bvecs $bvals $dwi_nii -force
-        Do_cmd dwi2mask $dwi_mif ${tmp}/${idBIDS}_brain_mask.nii.gz
-
-        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $AMICO_py $idBIDS $proc_dwi $tmp
-
-        voxel=($(mrinfo $T1nativepro -spacing))
-        Do_cmd mrgrid $NODDI_dir/AMICO/NODDI/fit_NDI.nii.gz regrid -voxel $voxel $NODDI_dir/AMICO/NODDI/fit_NDI_up.nii.gz
-        Do_cmd mrgrid $NODDI_dir/AMICO/NODDI/fit_FWF.nii.gz regrid -voxel $voxel $NODDI_dir/AMICO/NODDI/fit_FWF_up.nii.gz
-    else
-        Info "Subject ${id} has NODDI metrics"; ((Nsteps++))
-    fi
-
+alpha_NODDI=${tmpDir}/04_proc-COMMIT/alpha_calibration_NODDI.txt
+MVF_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-MTsatNODDIcalib_MVF.nii.gz
+if [[ ${gratiotractometry}  == "TRUE" ]] && [[ ! -f "$MVF_in_dwi" ]]; then
     if [[ ! -f "$alpha_NODDI" ]]; then
-        Info "Calculating alpha for NODDI calibration"
-        if [[ ! -d "${tmpDir}/ICNODDI_folder" ]]; then
-            Do_cmd mkdir ${tmpDir}/ICNODDI_folder
-        fi
-
-        cat $MVFalpha_list|while read line; do
-            if [[ ${line} == ${idBIDS} ]]; then 
-                IC=${tmpDir}/ICNODDI_folder/${idBIDS}_ICNODDI_brain.nii.gz
-                cp $NODDI_NDI $IC
-            fi
-        done
-
-        number_subject=($(awk 'END { print NR }' ${MVFalpha_list} )) 
-        number_file=($(ls ${tmpDir}/ICNODDI_folder -1 | wc -l)) 
-
-        until [ $number_subject == $number_file ]; do 
-            Info "Getting IC-NODDI file for all subjects, waiting additional 10m"
-            sleep 10m
-            number_file=($(ls ${tmpDir}/ICNODDI_folder -1 | wc -l)) 
-        done
-
-        Info "Calculating alpha for MTsat to MVF scaling through NODDI"
-        if [[ ! -d "${tmpDir}/MVFNODDI_calc" ]]; then
-            Do_cmd mkdir ${tmpDir}/MVFNODDI_calc
-            cat $MVFalpha_list|while read line; do
-                IFS='_' read -r -a array <<< "${line}"
-                alpha_sub="${array[0]}"
-                alpha_ses="${array[1]}"
-                Do_cmd antsApplyTransforms -d 3 -n NearestNeighbor \
-                       -i "${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts/splenium.nii.gz" \
-                       -r "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-t1w_nativepro_SyN.nii.gz" \
-                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_1Warp.nii.gz" \
-                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_0GenericAffine.mat" \
-                       -t ["$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
-                       -t "$out/$alpha_sub/$alpha_ses/xfm/${alpha_sub}_${alpha_ses}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
-                       -o "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz"
-                Do_cmd fslmaths "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_desc-MTsat_SyN.nii.gz" -nan "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MTsat_MNI152_1mm_splenium.nii.gz" #### MTsat file location for all subjects was hard-coded.
-                Do_cmd fslmaths "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$tmpDir/ICNODDI_folder/${alpha_sub}_${alpha_ses}_ICNODDI_brain.nii.gz" -nan "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_ICVF_MNI152_1mm_splenium.nii.gz"
-                Do_cmd fslmaths "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_MNI152_1mm_splenium.nii.gz" -mul "$out/$alpha_sub/$alpha_ses/dwi/${alpha_sub}_${alpha_ses}_space-dwi_model-DTI_map-FA.nii.gz" -nan "${tmpDir}/MVFNODDI_calc/${alpha_sub}_${alpha_ses}_space-dwi_FA_MNI152_1mm_splenium.nii.gz"
-            done
-            matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alphaNODDI('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_COMMIT/alpha_NODDI.txt', 'alpha', '-ASCII'); exit"
+        Info "Calculating alpha for MTsat to MVF scaling"
+        if [[ ! -d "${tmpDir}/MVFNODDI_calc_running" ]]; then
+            mkdir ${tmpDir}/MVFNODDI_calc_running
+            matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/MVFcalc_scripts')); alpha = get_alphaNODDI('$tmpDir','$MVFalpha_list'); save('$tmpDir/04_proc-COMMIT/alpha_calibration_NODDI.txt', 'alpha', '-ASCII'); exit"
             Do_cmd rm -r ${tmpDir}/MVFNODDI_calc
-        else
-            until [ -f $alpha_NODDI ]; do Info "Alpha computation for MTsat to MVF scaling is already in progress, waiting 10 min for it to finish"; sleep 10m; done
-
+            Do_cmd rm ${tmpDir}/MVFNODDI_calc_running
         fi
-    fi  
+    fi
+fi
+
+until [ -f $alpha_COMMIT ]; do Info "Alpha computation for MTsat to MVF scaling through COMMIT is already in progress, waiting 3 min for it to finish"; sleep 3m; done
+until [ -f $alpha_NODDI ]; do Info "Alpha computation for MTsat to MVF scaling through NODDI is already in progress, waiting 3 min for it to finish"; sleep 3m; done
+
+if [[ ${MySD}  == "TRUE" || ${gratio}  == "TRUE" ]] && [[ ! -f "$MVF_COMMIT_in_dwi" ]]; then
+    alpha_value=$(cat $alpha_COMMIT)
+    Do_cmd fslmaths $MTsat_in_dwi -mul $alpha_value $MVF_COMMIT_in_dwi
+else
+    Info "MTsat was already scaled to MVF"
 fi
 
 # -----------------------------------------------------------------------------------------------
@@ -291,12 +206,12 @@ fi
 COMMIT_AV_tck="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered.tck"
 COMMIT_AV_length="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered_length.txt"
 COMMIT_AV_weights="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered_weights.txt"
-COMMIT_AV_weighttimeslength="$proc_dwi/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered_volume.txt"
+COMMIT_AV_weighttimeslength="$proc_dwi/${idBIDS}_${init_tck_str}______-MySD-COMMITscaled-filtered_volume.txt"
 
 if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_AV_weighttimeslength ]]; then Info "Calculating AV using COMMIT"
 
     COMMIT=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT.py
-    weights_COMMIT_AV=${proc_dwi}/COMMITscaled/dict/Results_StickZeppelinBall_AdvancedSolvers/streamline_weights.txt
+    weights_COMMIT_AV=${proc_dwi}/COMMITscaledv2/dict/Results_StickZeppelinBall_AdvancedSolvers/streamline_weights.txt
 
     bvecs=${tmp}/${idBIDS}_bvecs.txt
     bvals=${tmp}/${idBIDS}_bvals.txt
@@ -309,45 +224,35 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_AV_weighttimeslength ]]; then I
     if [[ ! -f $tmp/${idBIDS}_dwi_upscaled.nii.gz ]]; then Info "Computing scaled dwi file"
         
         dwi_corr="$proc_dwi/${idBIDS}_space-dwi_desc-dwi_preproc.mif"
-
-        dwi_b0_down="${tmp}/${idBIDS}_space-dwi_desc-b0.nii.gz"
-        dwi_b0_down_brain="${tmp}/${idBIDS}_space-dwi_desc-b0_brain.nii.gz"
-        dwi_mask_tmp="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
-        dwi_mask="${tmp}/${idBIDS}_space-dwi_desc-b0_brain_mask.nii.gz"
-
-        dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0_down" -axis 3 -force
-        Do_cmd bet "$dwi_b0_down" "$dwi_b0_down_brain" -v # -B -f 0.25
-        Do_cmd fslmaths $dwi_b0_down_brain $dwi_mask_tmp
-        Do_cmd maskfilter "$dwi_mask_tmp" erode -npass 1 "$dwi_mask" -force
-
-        MTimage=($(ls $bids_derivs/matlab/$subject/$SES/anat/${idBIDS}_MTsat.nii* 2>/dev/null)) ##### Hard-coded location
-        alpha_value=$(cat ${tmpDir}/04_COMMIT/alpha.txt)
+        alpha_value=$(cat $alpha_COMMIT)
         MVFimage="$tmp/${idBIDS}_MVF.nii.gz"
-        MVF_in_dwi_lowres="$tmp/${idBIDS}_space-dwi_desc-MVF_lowres.nii.gz"
+        MVF_in_dwi_lowres="$tmp/${idBIDS}_space-dwi_desc-lowres_MVF.nii.gz"
         dwi_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_"
         dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
         dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
         dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
-        MTsat_affine="${dir_warp}/${idBIDS}_MTsat_to-nativepro_mode-image_desc-SyN_0GenericAffine.mat" #### Hard-coded transform, assuming registration was done using SC
 
-        Do_cmd fslmaths $MTimage -mul $alpha_value $MVFimage
-        Do_cmd antsApplyTransforms -d 3 -i "$MVFimage" -r "$dwi_b0_down" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$MTsat_affine" -o "$MVF_in_dwi_lowres" -v
+
+        dwi_b0_down="${tmp}/${idBIDS}_space-dwi_desc-b0.nii.gz"
+        dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0_down" -axis 3 -force
+        Do_cmd fslmaths $MTsat -nan -mul $alpha_value $MVFimage
+        Do_cmd antsApplyTransforms -d 3 -i "$MVFimage" -r "$dwi_b0_down" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$MTsat2T1w_affine" -o "$MVF_in_dwi_lowres" -v
         Do_cmd mrcalc 1 $MVF_in_dwi_lowres -subtract $tmp/scaling_1.nii.gz -force
         Do_cmd dwiextract $dwi_corr -bzero $tmp/b0s_down.mif -force
-        Do_cmd dwiextract $dwi_corr -no_bzero $tmp/not_b0s_down.mif -force
-        Do_cmd mrcalc $tmp/not_b0s_down.mif $tmp/scaling_1.nii.gz -mult $tmp/not_b0s_down_scaled.mif -force
-        Do_cmd mrcat $tmp/b0s_down.mif $tmp/not_b0s_down_scaled.mif $tmp/dwi_down_scaled.mif -force
+        Do_cmd mrmath $tmp/b0s_down.mif mean -axis 3 $tmp/mean_b0s_down.mif
+        Do_cmd mrcalc $dwi_corr $tmp/scaling_1.nii.gz -mult $tmp/mean_b0s_down.mif -div $tmp/dwi_down_scaled_norm.mif -force
+        Do_cmd mrcalc $tmp/dwi_down_scaled_norm.mif -finite $tmp/dwi_down_scaled_norm.mif 0.0 -if $tmp/dwi_down_scaled_norm_nonan.mif
         voxel=($(mrinfo $T1nativepro -spacing))
-        Do_cmd mrgrid $tmp/dwi_down_scaled.mif regrid -voxel $voxel $tmp/dwi_up_scaled.mif -force
+        Do_cmd mrgrid $tmp/dwi_down_scaled_norm_nonan.mif regrid -voxel $voxel $tmp/dwi_up_scaled_norm.mif -force
 
-        Do_cmd mrconvert $tmp/dwi_up_scaled.mif -export_grad_fsl $bvecs $bvals $tmp/${idBIDS}_dwi_upscaled.nii.gz -force
+        Do_cmd mrconvert $tmp/dwi_up_scaled_norm.mif -export_grad_fsl $bvecs $bvals $tmp/${idBIDS}_dwi_upscaled.nii.gz -force
         Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii -force
         Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask -force 
     fi
 
     while [[ ! -f $weights_COMMIT_AV  ]] ; do
         Info "Running COMMIT"
-        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp $proc_dwi/COMMITscaled $MySD_tck
+        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp $proc_dwi/COMMITscaledv2 $MySD_tck 
         # Removing streamlines whose weights are too low
       	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_COMMIT_AV $MySD_tck $COMMIT_AV_tck -force
         # Testing if MySD ran into any issues
@@ -407,14 +312,13 @@ fi
 if [[ "$gratiotractometry" == "TRUE" ]]; then
     gratiomap=${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap.nii.gz
     weights_gratio="${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap_track_weight.csv"
-    MVF_in_dwi=${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-MVFmap.nii.gz
     alphaNODDI_value=$(cat $alpha_NODDI)
 
     if [[ ! -f "$weights_gratio" ]]; then
 
         Do_cmd fslmaths $MTsat_in_dwi -mul $alphaNODDI_value $MVF_in_dwi
-        Do_cmd mrcalc 1 $MVF_in_dwi -subtract 1 $NODDI_dir/AMICO/NODDI/fit_FWF_up.nii.gz -subtract -multiply $NODDI_dir/AMICO/NODDI/fit_NDI_up.nii.gz -multiply $tmp/AVF_NODDI.nii.gz
-        Do_cmd mrcalc $tmp/AVF_NODDI.nii.gz $tmp/AVF_NODDI.nii.gz $MVF_in_dwi -add -div -sqrt $gratiomap
+        Do_cmd mrcalc 1 $MVF_in_dwi -subtract 1 $proc_dwi/NODDI_AMICO/AMICO/NODDI/fit_FWF_up.nii.gz -subtract -multiply $proc_dwi/NODDI_AMICO/AMICO/NODDI/fit_NDI_up.nii.gz -multiply $tmp/AVF_NODDI.nii.gz
+        Do_cmd mrcalc $tmp/AVF_NODDI.nii.gz $tmp/AVF_NODDI.nii.gz $MVF_in_dwi -add -div -sqrt $gratiomap -force
 
         # Grabbing the correct tract
         if [ -f $COMMIT_AV_tck ]; then
@@ -687,7 +591,6 @@ if [[ ${MySD}  == "TRUE" ]] || [[ ${gratio}  == "TRUE" ]]; then
 else Info "MySD annotated connectomes have already generated"; 
 fi
 
-
 if [[ ${gratio}  == "TRUE" ]]; then
     for seg in "${parcellations[@]}"; do
         parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
@@ -710,14 +613,12 @@ if [[ ${gratio}  == "TRUE" ]]; then
         fi
         if [[ ! -f "${connectome_str_COMMIT}gratio_full-connectome.txt" ]]; then
             Info "Generating $parc_name g-ratio and COMMIT connectome"
-            option1="-scale_file $weights_gratio -stat_edge mean"
             option2="-tck_weights_in $COMMIT_AV_weights"
             option3="-tck_weights_in $COMMIT_AV_weighttimeslength"
             option4="-tck_weights_in $COMMIT_AV_weights -scale_invnodevol"
             option5="-tck_weights_in $COMMIT_AV_weighttimeslength -scale_invnodevol"
             option6=""
             option7="-scale_length -stat_edge mean"
-            build_connectomes "$COMMIT_AV_tck" "$dwi_all" "${connectome_str_COMMIT}gratio-tractometry_full" "$option1"
             build_connectomes "$COMMIT_AV_tck" "$dwi_all" "${connectome_str_COMMIT}axonal-cross-sectional-area_full" "$option2"
             build_connectomes "$COMMIT_AV_tck" "$dwi_all" "${connectome_str_COMMIT}axonal-volume_full" "$option3"
             build_connectomes "$COMMIT_AV_tck" "$dwi_all" "${connectome_str_COMMIT}axonal-cross-sectional-area-node-norm_full" "$option4"
@@ -726,8 +627,14 @@ if [[ ${gratio}  == "TRUE" ]]; then
             build_connectomes "$COMMIT_AV_tck" "$dwi_all" "${connectome_str_COMMIT}LOS_full" "$option7"
 
     		matlab -nodisplay -r "MVF = dlmread('${connectome_str_MySD}myelin-volume_full-connectome.txt'); AVF = dlmread('${connectome_str_COMMIT}axonal-volume_full-connectome.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${connectome_str_COMMIT}gratio_full-connectome.txt', 'gratio', '-ASCII'); exit"
-
         fi
+
+        if [[ ! -f "${connectome_str_COMMIT}gratio-tractometry_full" ]]; then
+            Info "Generating $parc_name g-ratio tractometry"
+            option1="-scale_file $weights_gratio -stat_edge mean"
+            build_connectomes "$COMMIT_AV_tck" "$dwi_all" "${connectome_str_COMMIT}gratio-tractometry_full" "$option1"
+        fi
+
     done
 fi
 
@@ -735,7 +642,6 @@ fi
 # Tractometry connectomes generation 
 
 if [[ ${tractometry}  == "TRUE" ]]; then
-
     # Getting the tck file for tractometry
     if [ -f $COMMIT_AV_tck  ]; then
         tractometry_tck=$COMMIT_AV_tck
@@ -761,10 +667,10 @@ if [[ ${tractometry}  == "TRUE" ]]; then
         t1_image_affine="${str_image_syn}0GenericAffine.mat"
 
         image_in_dwi="${proc_dwi}/${idBIDS}_space-dwi_desc-${image_str}_SyN.nii.gz"
-        weights_image="${proc_dwi}/${idBIDS}_${connectome_str_tractometry}-filtered_${image_str}-weight.csv"
+        weights_image="${proc_dwi}/${idBIDS}_space-dwi_desc-${image_str}-tractometry-weight.csv"
 
         if [[ ! -f "$weights_image" ]]; then
-            Info "Non-linear registration and sampling of ${image_str}"
+            Info "Linear registration and sampling of ${image_str}"
             #Do_cmd antsBrainExtraction.sh -d 3 -a $image -e "$util_MNIvolumes/MNI152_T1_1mm_brain.nii.gz" -m $MNI152_mask -o "${tmp}/${idBIDS}_${image_str}_"
             Do_cmd bet $image $image_brain -f 0.35
             Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$image_brain" -o "$str_image_syn" -t a -n "$threads" -p d
@@ -777,9 +683,10 @@ if [[ ${tractometry}  == "TRUE" ]]; then
               Info "Subject ${id} has already sampled ${image_str}"; ((Nsteps++))
         fi
 
+        connectome_str_tractometry=${connectome_str_tractometry/"space-dwi"/}
         for seg in "${parcellations[@]}"; do
             parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
-            connectome_str="${dwi_cnntm}/${idBIDS}_${connectome_str_tractometry}-filtered-"
+            connectome_str="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}${connectome_str_tractometry}-filtered-"
             lut="${util_lut}/lut_${parc_name}_mics.csv"
             dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
             dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
@@ -795,9 +702,9 @@ if [[ ${tractometry}  == "TRUE" ]]; then
                 Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_subc" -add "$dwi_cortex" "$dwi_cortexSub" -odt int # added the subcortical parcellation
                 Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int # added the cerebellar parcellation
             fi
-            if [[ ! -f "${connectome_str}-${image_str}-tractometry_full-connectome.txt" ]]; then
+            if [[ ! -f "${connectome_str}${image_str}-tractometry_full-connectome.txt" ]]; then
                 option1="-scale_file $weights_image -stat_edge mean"
-                build_connectomes "$tractometry_tck" "$dwi_all" "${connectome_str}-${image_str}-tractometry_full" "$option1"
+                build_connectomes "$tractometry_tck" "$dwi_all" "${connectome_str}${image_str}-tractometry_full" "$option1"
             fi
         done
     done
