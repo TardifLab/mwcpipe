@@ -100,11 +100,11 @@ if [ ! -f "${proc_struct}/${T1str_nat}".nii.gz ] || [ ! -f "${proc_struct}/${T1s
     # If multiple T1w were provided, Register and average to the first T1w
     if [ "$N" -gt 1 ]; then
       ref=${bids_T1ws[0]} # reference to registration
-      ref_run=$(echo "${bids_T1ws[0]}" | awk -F 'run-' '{print $2}'| sed 's:_T1w.nii.gz::g')
+      ref_run=$(echo "${bids_T1ws[0]}" | awk -F 'run-' '{print $2}'| sed 's:_T1w.nii.gz::g'| sed 's:_T1w.nii::g')
       t1ref="run-${ref_run}"
       # Loop over each T1
       for ((i=1; i<=n; i++)); do
-          run=$(echo "${bids_T1ws[i]}" | awk -F 'run-' '{print $2}'| sed 's:_T1w.nii.gz::g')
+          run=$(echo "${bids_T1ws[i]}" | awk -F 'run-' '{print $2}'| sed 's:_T1w.nii.gz::g'| sed 's:_T1w.nii::g')
           T1mat_str="${dir_warp}/${idBIDS}_t1w_from-run-${run}_to_${t1ref}_"
           T1mat="${T1mat_str}0GenericAffine.mat"
           T1run_2_T1="${tmp}/${id}_t1w_from-run-${run}_to_${t1ref}.nii.gz"
