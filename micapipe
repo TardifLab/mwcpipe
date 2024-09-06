@@ -131,13 +131,23 @@ echo -e "
 \t\t\033[38;5;120m-reg_lambda\033[0m          : Regularization parameter lambda required for COMMIT2
 \t\t\033[38;5;120m-tractometry\033[0m         : Option to perform tractometry using the generated tractogram 
 \t\t\t\t         (If there are multiple images, put all of them in a single argument! e.g., -tractometry 'image1 image2 image3') 
+\t\t\033[38;5;120m-aparc_nodes\033[0m         : Option to use subject's aparc cortical parcel from post-structural when generating nodes for COMMIT
+\t\t\t\t         (If used, it is assumed that QC/manual editing has ensured that this cortical parcel does not have erroneous inclusions of WMHs) 
+
+\t\033[38;5;197m-pre_COMMIT\033[0m
+\t\t\033[38;5;120m-MTsat\033[0m               : MTsat image 
+\t\t\t\t         (MTsat image required if performing MySD or g-ratio) 
+\t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (BIDS format: {sub}_{ses}) that will be used to calibrate the alpha factor for MVF calculation
+\t\t\033[38;5;120m-MySD\033[0m                : Will run MySD in proc_COMMIT to calculate tract-specific myelin volume
+\t\t\033[38;5;120m-gratio\033[0m              : Will run MySD and COMMIT in proc_COMMIT to and calculate tract-specific g-ratio
+\t\t\033[38;5;120m-gratiotractometry\033[0m   : Will run NODDI to obtain g-ratio tractometry in proc_COMMIT
 
 \t\033[38;5;197m-proc_COMMIT\033[0m
-\t\t\033[38;5;120m-MTsat_DWI\033[0m           : MTsat image already registered to diffusion space
+\t\t\033[38;5;120m-MTsat\033[0m               : MTsat image 
 \t\t\t\t         (MTsat image required if performing MySD or g-ratio) 
-\t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (BIDS format) that will be used to calibrate the alpha factor for MVF calculation
+\t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (BIDS format: {sub}_{ses}) that will be used to calibrate the alpha factor for MVF calculation
 \t\t\033[38;5;120m-MySD\033[0m                : Run MySD and calculate tract-specific myelin volume
-\t\t\033[38;5;120m-gratio\033[0m              : Run MySD and COMMIT, and calculate tract-specific g-ratio
+\t\t\033[38;5;120m-gratio\033[0m              : Run MySD and COMMIT (modified to obtain axon volume), and calculate tract-specific g-ratio
 \t\t\033[38;5;120m-gratiotractometry\033[0m   : Obtain g-ratio tractometry through NODDI
 \t\t\033[38;5;120m-Dual_MTOn\033[0m           : Dual encoded MTon-DWI image - will run DUAL-COMMIT if all the other Dual options have inputs
 \t\t\033[38;5;120m-Dual_MTOFF\033[0m          : Dual encoded MToff-DWI image
@@ -375,6 +385,10 @@ do
     filter_input=$2
     shift;shift
   ;;
+  -aparc_nodes)
+    aparc_nodes=TRUE
+    shift
+  ;;
   -GD)
     postGD=TRUE
     shift
@@ -385,6 +399,10 @@ do
   ;;
   -proc_COMMIT)
     proc_COMMIT=TRUE
+    shift
+  ;;
+  -pre_COMMIT)
+    pre_COMMIT=TRUE
     shift
   ;;
   -MVFalpha_list)
@@ -404,9 +422,9 @@ do
     gratiotractometry=TRUE
     shift
   ;;
-  -MTsat_DWI)
-    MTsat_DWI=TRUE
-    MTsat_DWI_input=$2
+  -MTsat)
+    MTsat=TRUE
+    MTsat_input=$2
     shift;shift
   ;;
   -Dual_MTON)
@@ -568,7 +586,7 @@ fi
 # argument check out & WARNINGS
 missing_arg
 
-runs=($ALL $procVOL $procFS $postVOL $procDWI $procFunc $postDWI $proc_COMMIT $postGD $postMorph $postMPC $qtest $qcsubj $cleanup)
+runs=($ALL $procVOL $procFS $postVOL $procDWI $procFunc $postDWI $pre_COMMIT $proc_COMMIT $postGD $postMorph $postMPC $qtest $qcsubj $cleanup)
 if [ "${#runs[@]}" -lt 1 ]; then
 Error "A processing flag is missing:
                     -proc_structural
@@ -577,6 +595,7 @@ Error "A processing flag is missing:
                     -proc_dwi
                     -proc_func
                     -SC
+                    -pre_COMMIT
                     -proc_COMMIT
                     -MPC
                     -GD
@@ -625,8 +644,9 @@ if [ -z ${keep_tck} ]; then keep_tck=FALSE; else keep_tck=TRUE; fi
 if [ -z ${tractometry} ]; then tractometry=FALSE; else tractometry=TRUE; fi
 if [ -z ${reg_lambda} ]; then reg_lambda=FALSE; else reg_lambda=$reg_lambda_input; fi
 if [ -z ${filter} ]; then filter=FALSE; else filter=TRUE; fi
+if [ -z ${aparc_nodes} ]; then aparc_nodes=FALSE; else aparc_nodes=TRUE; fi
 
-# Optional arguments proc_COMMIT
+# Optional arguments pre-COMMIT and proc_COMMIT
 if [ -z ${MVFalpha_list} ]; then MVFalpha_list=FALSE; else MVFalpha_list=$MVFalpha_list_input; fi
 if [ -z ${MySD} ]; then MySD=FALSE; else MySD=TRUE; fi
 if [ -z ${gratio} ]; then gratio=FALSE; else gratio=TRUE; fi
@@ -637,7 +657,7 @@ if [ -z ${Dual_MTON} ] && [ -z ${Dual_MTOFF} ]; then
 fi
 if [ -z ${Dual_bvals} ]; then Dual_bvals=FALSE; else Dual_bvals=$Dual_bvals; fi
 if [ -z ${Dual_bvecs} ]; then Dual_bvecs=FALSE; else Dual_bvecs=$Dual_bvecs; fi
-if [ -z ${MTsat_DWI} ]; then MTsat_DWI=FALSE; else MTsat_DWI=$MTsat_DWI_input; fi
+if [ -z ${MTsat} ]; then MTsat=FALSE; else MTsat=$MTsat_input; fi
 if [ -z ${tck_imaging} ]; then tck_imaging=FALSE; else tck_imaging=TRUE; fi
 
 # Optional arguments proc_dwi
@@ -990,7 +1010,7 @@ fi
 #   REQUIRES -proc_dwi 
 if [ "$ALL" = "TRUE" ] || [ "$postDWI" = "TRUE" ]; then
     log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/03_SC.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $tracts $autoTract $keep_tck $dwi_str $filter $reg_lambda $tractometry"
+    COMMAND="${scriptDir}/03_SC.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $tracts $autoTract $keep_tck $dwi_str $filter $reg_lambda $tractometry $aparc_nodes"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - POST DWI processing (tractography)"
@@ -1014,12 +1034,41 @@ if [ "$ALL" = "TRUE" ] || [ "$postDWI" = "TRUE" ]; then
 fi
 
 # -----------------------------------------------------------------------------------------------#
+#       pre_COMMIT: tract-specific processing 
+# -----------------------------------------------------------------------------------------------#
+#   REQUIRES -SC 
+if [ "$ALL" = "TRUE" ] || [ "$pre_COMMIT" = "TRUE" ]; then
+    log_file_str=$dir_logs/pre_COMMIT_$(date +'%d-%m-%Y')
+    COMMAND="${scriptDir}/04_pre-COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $gratiotractometry $MTsat"
+    # mica.q - post-DWI processing (tractography)
+    if [[ $micaq == "TRUE" ]]; then
+        Info "MICA qsub - Tract-specific processing (COMMIT)"
+        Warning "This option only works on the MICA workstations"
+        export PROC="qsub-MICA"
+        # Info "Setting a warper to run on mica.q"
+        qsub -q mica.q -pe smp 20-40 -l h_vmem=10G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
+             $COMMAND $PROC
+    # all.q - post-DWI processing (tractography)
+    elif [[ $qall == "TRUE" ]]; then
+        Info "all.q qsub - Tract-specific processing (COMMIT)"
+        Warning "This option only works on the McGill BIC network"
+        export PROC="qsub-all.q"
+        # Info "Setting a warper to run on all.q"
+        qsub -q all.q -pe all.pe 20-40 -l h_vmem=10G -N q${id}_SC -e ${log_file_str}.e -o ${log_file_str}.txt \
+             $COMMAND $PROC
+    else
+        # LOCAL - post-DWI processing (tractography)
+        $COMMAND $PROC 2>&1 | tee -a ${log_file_str}.txt
+    fi
+fi
+
+# -----------------------------------------------------------------------------------------------#
 #       proc_COMMIT: tract-specific processing 
 # -----------------------------------------------------------------------------------------------#
-#   REQUIRES -proc_dwi 
+#   REQUIRES -pre_COMMIT 
 if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
-    log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/04_COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $gratiotractometry $MTsat_DWI $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry $tck_imaging"
+    log_file_str=$dir_logs/proc_COMMIT_$(date +'%d-%m-%Y')
+    COMMAND="${scriptDir}/04_proc-COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat $gratiotractometry $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry $tck_imaging"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Tract-specific processing (COMMIT)"
