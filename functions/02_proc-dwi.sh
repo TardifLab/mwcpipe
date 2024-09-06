@@ -135,8 +135,7 @@ Nsteps=0
 
 # Create script specific temp directory
 #tmp="${tmpDir}/${RANDOM}_micapipe_proc-dwi_${id}"
-#tmp=${tmpDir}/02_proc-dwi/${subject}/${SES}       ####Original micapipe scrit
-tmp=$proc_dwi/tmp         #### Added line for testing. Delete after finished
+tmp=${tmpDir}/02_proc-dwi/${subject}/${SES}
 Do_cmd mkdir -p "$tmp"
 
 [[ ! -d "$dir_QC_png" ]] && Do_cmd mkdir "$dir_QC_png"
