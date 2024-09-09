@@ -55,6 +55,10 @@ You can find the latest version of the container in [Docker](https://hub.docker.
 ### `python` packages ###
 |     *Package*     |  *Version*  |
 |:---------------:|:---------:|
+| dmri-amico      | 2.0.1     |
+| dmri-commit     | 2.1.0     |
+| dipy            | 1.9.0     |
+| cython          | 0.29.30   |
 | brainspace      | 0.1.1     |
 | certifi         | 2020.6.20 |
 | cycler          | 0.10.0    |
