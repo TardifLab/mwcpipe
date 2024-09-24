@@ -28,10 +28,12 @@ keep_tck=${10}
 dwi_str=${11}
 filter=${12}
 reg_lambda=${13}
-tractometry=${14} 
-filter_types=${15}
-tractometry_input=${16}
-PROC=${17}
+tractometry=${14}
+aparc_nodes=${15} 
+diffusivity=${16}
+filter_types=${17}
+tractometry_input=${18}
+PROC=${18}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -93,9 +95,11 @@ if [ ! -f "$T1_seg_subcortex" ]; then Error "Subject $id doesn't have subcortica
 if [ ! -f "$dwi_mask" ]; then Error "Subject $id doesn't have DWI binary mask:\n\t\tRUN -proc_dwi"; exit; fi
 if [ ! -f "$dti_FA" ]; then Error "Subject $id doesn't have a FA:\n\t\tRUN -proc_dwi"; exit; fi
 if [ ! -f "$dwi_SyN_affine" ]; then Warning "Subject $id doesn't have an SyN registration, only AFFINE will be apply"; regAffine="TRUE"; else regAffine="FALSE"; fi
-if [[ $filter_types != "COMMIT" && $filter_types != "SIFT2" && $filter_types != "COMMIT2" ]]; then Error "-filter argument does not exist"; exit; fi
-if [[ "$filter_types" == "COMMIT2" ]] && [[ "$reg_lambda" == "FALSE" ]]; then Error "Subject $id is filtering using COMMIT2 but doesn't have a lambda:\n\t\tRUN -SC with -reg_lambda"; exit; fi
 
+for filter_name_parse in $filter_types; do
+    if [[ $filter_name_parse != "COMMIT" && $filter_name_parse != "SIFT2" && $filter_name_parse != "COMMIT2" ]]; then Error "one of the -filter argument does not exist"; exit; fi
+done
+if [[ "$filter_types" == "COMMIT2" ]] && [[ "$reg_lambda" == "FALSE" ]]; then Error "Subject $id is filtering using COMMIT2 but doesn't have a lambda:\n\t\tRUN -SC with -reg_lambda"; exit; fi
 # -----------------------------------------------------------------------------------------------
 # Check IF output exits and WARNING
 N=$(ls "${dwi_cnntm}"/"${idBIDS}"_space-dwi_atlas-*_desc-iFOD2-"${tracts}"-"${filter}"_full-connectome.txt 2>/dev/null | wc -l)
@@ -119,12 +123,8 @@ Nparc=0
 # Create script specific temp directory
 #tmp="${tmpDir}/${RANDOM}_micapipe_post-dwi_${id}"
 
-tmpDir=/data/tardiflab2/wenda/tmp
-tmp=${tmpDir}/03_SC/${subject}/${SES}
+tmp=${tmpDir}/03_SC/${subject}/${SES}/${tracts}
 Do_cmd mkdir -p "$tmp"
-
-#tmp=${tmpDir}/03_SC/${subject}/${SES}
-#Do_cmd mkdir -p "$tmp"
 
 # TRAP in case the script fails
 trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
@@ -181,7 +181,8 @@ if [ ! -f "$tck" ]; then
         -cutoff 0.06 \
         -maxlength 400 \
         -minlength 10 \
-        -select "$tracts"
+        -select "$tracts" \
+        -quiet
 
     # Exit if tractography fails
     if [ ! -f "$tck" ]; then Error "Tractogram failed, check the logs: $(ls -Art "$dir_logs"/post-dwi_*.txt | tail -1)"; exit; fi
@@ -199,8 +200,8 @@ fi
 
 # -----------------------------------------------------------------------------------------------
 # Filtering
-if [[ ${filter}  == "TRUE" ]]; then
-
+if [[ ${filter} == "TRUE" ]]; then
+    
     for filter_name in $filter_types; do
 
         weights_sift2="${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_SIFT2_weights.txt"
@@ -211,8 +212,52 @@ if [[ ${filter}  == "TRUE" ]]; then
         fi
 
         if [[ "$filter_name" == "COMMIT2" || "$filter_name" == "COMMIT" ]]; then
-         	
-            if [[ ! -f "$tmp/${idBIDS}_DK-85-full_dwi.nii.gz" ]]; then 
+
+            if [[ ${diffusivity} == "TRUE" ]] && [[ ! -f "${proc_dwi}/${idBIDS}_space-dwi_para_diff.txt" ]]; then 
+                dwi_dti="${proc_dwi}/${idBIDS}_space-dwi_model-DTI.mif"
+                dti_FA=$tmp/${idBIDS}_space-dwi_model-DTI_map-FA.nii.gz
+                dti_ADC=$tmp/${idBIDS}_space-dwi_model-DTI_map-ADC.nii.gz
+                dti_AD=$tmp/${idBIDS}_space-dwi_model-DTI_map-AD.nii.gz
+                dti_RD=$tmp/${idBIDS}_space-dwi_model-DTI_map-RD.nii.gz
+
+                tensor2metric -nthreads "$threads" -fa "$dti_FA" -adc "$dti_ADC" -ad "$dti_AD" -rd "$dti_RD" "$dwi_dti"
+                
+                Do_cmd antsApplyTransforms -d 3 -n NearestNeighbor \
+                    -i "${MICAPIPE}/tardiflab/scripts/01_processing/Diffusivity_calc/CC.nii.gz" \
+                    -r "${proc_dwi}/${idBIDS}_space-dwi_desc-t1w_nativepro_SyN.nii.gz" \
+                    -t "${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_1Warp.nii.gz" \
+                    -t "${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_0GenericAffine.mat" \
+                    -t ["${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
+                    -t "${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
+                    -o "${tmp}/${idBIDS}_space-dwi_MNI152_1mm_CC.nii.gz"
+                Do_cmd antsApplyTransforms -d 3 -n NearestNeighbor \
+                    -i "${MICAPIPE}/tardiflab/scripts/01_processing/Diffusivity_calc/ventricles.nii.gz" \
+                    -r "${proc_dwi}/${idBIDS}_space-dwi_desc-t1w_nativepro_SyN.nii.gz" \
+                    -t "${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_1Warp.nii.gz" \
+                    -t "${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_0GenericAffine.mat" \
+                    -t ["${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_0GenericAffine.mat",1] \
+                    -t "${dir_warp}/${idBIDS}_from-nativepro_brain_to-MNI152_1mm_mode-image_desc-SyN_1InverseWarp.nii.gz" \
+                    -o "${tmp}/${idBIDS}_space-dwi_MNI152_1mm_ventricles.nii.gz"
+
+                Do_cmd fslmaths $dti_FA -mul ${tmp}/${idBIDS}_space-dwi_MNI152_1mm_CC.nii.gz -nan ${tmp}/${idBIDS}_space-dwi_CC_FA.nii.gz
+                Do_cmd fslmaths $dti_AD -mul ${tmp}/${idBIDS}_space-dwi_MNI152_1mm_CC.nii.gz -nan ${tmp}/${idBIDS}_space-dwi_CC_AD.nii.gz
+                Do_cmd fslmaths $dti_RD -mul ${tmp}/${idBIDS}_space-dwi_MNI152_1mm_CC.nii.gz -nan ${tmp}/${idBIDS}_space-dwi_CC_RD.nii.gz
+                Do_cmd fslmaths $dti_FA -mul ${tmp}/${idBIDS}_space-dwi_MNI152_1mm_ventricles.nii.gz -nan ${tmp}/${idBIDS}_space-dwi_ventricles_FA.nii.gz
+                Do_cmd fslmaths $dti_ADC -mul ${tmp}/${idBIDS}_space-dwi_MNI152_1mm_ventricles.nii.gz -nan ${tmp}/${idBIDS}_space-dwi_ventricles_ADC.nii.gz
+
+                matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/Diffusivity_calc')); diff_para = double(get_diff('${tmp}/${idBIDS}_space-dwi_CC_AD.nii.gz','${tmp}/${idBIDS}_space-dwi_CC_FA.nii.gz',[0.8,0.95])); save('${proc_dwi}/${idBIDS}_space-dwi_para_diff.txt', 'diff_para', '-ASCII'); exit" 
+                matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/Diffusivity_calc')); diff_perp = double(get_diff('${tmp}/${idBIDS}_space-dwi_CC_RD.nii.gz','${tmp}/${idBIDS}_space-dwi_CC_FA.nii.gz',[0.8,0.95])); save('${proc_dwi}/${idBIDS}_space-dwi_perp_diff.txt', 'diff_perp', '-ASCII'); exit" 
+                matlab -nodisplay -r "addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/Diffusivity_calc')); diff_iso = double(get_diff('${tmp}/${idBIDS}_space-dwi_ventricles_ADC.nii.gz','${tmp}/${idBIDS}_space-dwi_ventricles_FA.nii.gz',[0.003,0.1])); save('${proc_dwi}/${idBIDS}_space-dwi_iso_diff.txt', 'diff_iso', '-ASCII'); exit" 
+                para_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_para_diff.txt)
+                perp_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_perp_diff.txt)
+                iso_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_iso_diff.txt)
+            elif [[ ${diffusivity} == "FALSE" ]]; then 
+                para_diff=1.7E-3
+                perp_diff=0.51E-3
+                iso_diff=3.0E-3
+            fi
+
+            if [[ ! -f "$tmp/${idBIDS}_DK-85-full_dwi.nii.gz" && ${aparc_nodes} == "FALSE" ]]; then 
                 Info "Creating DK85 parcel"            
                 # Converting aparc+aseg parcellation  
                 Do_cmd mri_convert ${dir_freesurfer}/mri/aparc+aseg.mgz $tmp/aparc+aseg.nii.gz --out_orientation LAS
@@ -233,8 +278,16 @@ if [[ ${filter}  == "TRUE" ]]; then
                 t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
                 Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
                 Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v
+
+            elif [[ ! -f "$tmp/${idBIDS}_nodes.nii.gz" ]] && [[ ${aparc_nodes} == "TRUE" ]]; then 
+                Info "Creating nodes for COMMIT using FSL's subcortical segmentation and subject's aparc cortical parcel, both in DWI-space"            
+                aparc=${dir_volum}/${idBIDS}_space-nativepro_t1w_atlas-aparc.nii.gz
+                aparc_str=$(basename ${aparc/.nii.gz/})
+                Do_cmd antsApplyTransforms -d 3 -e 3 -i "$aparc" -r "${dwi_b0}" -n GenericLabel "$trans_T12dwi" -o "$tmp/${aparc_str}-cor_dwi.nii.gz" -v -u int
+                fslmaths $dwi_subc -add "$tmp/${aparc_str}-cor_dwi.nii.gz" $tmp/${idBIDS}_nodes.nii.gz
             fi
 
+            # Generate prerequisite DWI derivatives for COMMIT
             wm_fod_mif="${proc_dwi}/${idBIDS}_space-dwi_model-CSD_map-FOD_desc-wmNorm.mif"
             wm_fod_json=${tmp}/${idBIDS}_wm_fod_norm.json
             wm_fod_nii=${tmp}/${idBIDS}_wm_fod_norm.nii.gz
@@ -265,7 +318,7 @@ if [[ ${filter}  == "TRUE" ]]; then
                 COMMIT2=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT2.py
                 while [[ ! -f $weights_commit2  ]] ; do #Sometimes run into an error with COMMIT outputs, reruning it seems to fix it
                 Info "Running COMMIT2"
-                Do_cmd /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT2 ${idBIDS} $proc_dwi $tmp $reg_lambda #empirically determined to have a matrix density of 35% using the DK parcellation (2e-1 for deterministic at 3M, 8e-1 for probabilistic at 3M for MWC dataset)
+                Do_cmd /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT2 ${idBIDS} $proc_dwi $tmp $reg_lambda $para_diff $iso_diff #empirically determined to have a matrix density of 35% using the DK parcellation (2e-1 for deterministic at 3M, 8e-1 for probabilistic at 3M for MWC dataset)
                 # Remove any streamlines whose weights are too low
                 Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit2 -tck_weights_out $COMMIT2_weights $tmp/DWI_tractogram_connecting.tck $COMMIT2_tck -force     
                 # Testing if COMMIT2 ran into any issues
@@ -294,28 +347,29 @@ if [[ ${filter}  == "TRUE" ]]; then
         COMMIT_weighttimeslength="$proc_dwi/${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT-filtered_volume.txt"
         weights_commit="${proc_dwi}/COMMIT_init/dict/Results_StickZeppelinBall_AdvancedSolvers/streamline_weights.txt"
 
-        if [[ $filter_name == "COMMIT" ]] && [[ ! -f "$COMMIT_tck" ]]; then
+        if [[ $filter_name == "COMMIT" ]] && [[ ! -f "$COMMIT_tck" ]] && [[ ${aparc_nodes} == "FALSE" ]]; then
             COMMIT=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT_init.py
             if [[ ! -f $weights_commit ]]; then
-                while [[ ! -f $weights_commit  ]] ; do #Sometimes run into an error with COMMIT outputs, reruning it seems to fix it
                 Info "Running COMMIT"
                 Do_cmd fslmaths $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -bin $tmp/${idBIDS}_DK-85-full_dwi_bin.nii.gz
                 Do_cmd tck2connectome $tck $tmp/${idBIDS}_DK-85-full_dwi_bin.nii.gz ${tmp}/nos.txt -quiet -out_assignments ${tmp}/tck_assignments.txt
-                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -nodes 1 -keep_self
                 Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck_unused.tck -files single -nodes 0 -keep_self
+                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -nodes 1 -keep_self
 #                Do_cmd tck2connectome $tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${tmp}/nos.txt -quiet -out_assignments ${tmp}/tck_assignments.txt
 #                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -nodes 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85
-             	Do_cmd /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp ${tmp}/filt_tck.tck
-                # Remove any streamlines whose weights are too low
-                Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit -tck_weights_out $COMMIT_weights ${tmp}/filt_tck.tck $COMMIT_tck -force     
-                # Testing if COMMIT2 ran into any issues
-                tmptckcount=$(tckinfo $COMMIT_tck -count)
-                if [[ "${tmptckcount##* }" -eq 0 ]]; then
-                    rm -r "${proc_dwi}/COMMIT_init"
-                fi
+                counter=0 # Counter to track number of times COMMIT has been run
+                while [[ ! -f $weights_commit && counter -lt 3 ]] ; do #Sometimes run into an error with COMMIT outputs, rerunning it seems to fix it
+                    counter=$((counter + 1))
+             	    Do_cmd /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp ${tmp}/filt_tck.tck $para_diff $perp_diff $iso_diff
+                    # Remove any streamlines whose weights are too low
+                    Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit -tck_weights_out $COMMIT_weights ${tmp}/filt_tck.tck $COMMIT_tck -force     
+                    #    Testing if COMMIT2 ran into any issues
+                    tmptckcount=$(tckinfo $COMMIT_tck -count)
+                    if [[ "${tmptckcount##* }" -eq 0 ]]; then
+                        rm -r "${proc_dwi}/COMMIT_init"
+                    fi
                 done
             fi
-
             # Compute network density
             Do_cmd tck2connectome -nthreads $threads $COMMIT_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz $proc_dwi/nos_commit.txt -symmetric -zero_diagonal -quiet -force
             # Get track length
@@ -327,9 +381,42 @@ if [[ ${filter}  == "TRUE" ]]; then
                 # Here to cleanup some files
                 rm -r ${proc_dwi}/COMMIT_init/dict/dict*
             fi
+
+        elif [[ $filter_name == "COMMIT" ]] && [[ ! -f "$COMMIT_tck" ]] && [[ ${aparc_nodes} == "TRUE" ]]; then
+            COMMIT=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT_init.py
+            if [[ ! -f $weights_commit  ]]; then # Same protocol as previous if-statement, but with nodes defined using the aparc cortical parcel
+                Info "Running COMMIT"
+                Do_cmd tck2connectome $tck $tmp/${idBIDS}_nodes.nii.gz ${tmp}/nos.txt -quiet -out_assignments ${tmp}/tck_assignments.txt
+                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -keep_self
+                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck_unused.tck -files single -nodes 0 -keep_self
+                counter=0 # Counter to track number of times COMMIT has been run
+                while [[ ! -f $weights_commit && counter -lt 3 ]]; do
+                    counter=$((counter + 1))
+             	    Do_cmd /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp ${tmp}/filt_tck.tck $para_diff $perp_diff $iso_diff
+                    Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_commit -tck_weights_out $COMMIT_weights ${tmp}/filt_tck.tck $COMMIT_tck -force     
+                    tmptckcount=$(tckinfo $COMMIT_tck -count)
+                    if [[ "${tmptckcount##* }" -eq 0 ]]; then
+                        rm -r "${proc_dwi}/COMMIT_init"
+                    fi
+                done
+                if [[ ! -f $COMMIT_tck ]]; then
+                    Error "COMMIT failed $counter times, check logs."
+                    exit
+                fi
+            fi
+            # Compute network density
+            Do_cmd tck2connectome -nthreads $threads $COMMIT_tck $tmp/${idBIDS}_nodes.nii.gz $proc_dwi/nos_commit.txt -symmetric -zero_diagonal -quiet -force
+            # Get track length
+            Do_cmd tckstats $COMMIT_tck -dump $COMMIT_length -force
+
+            # Get track volume
+            matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); COMMIT_weighttimeslength = weight_times_length('$COMMIT_weights','$COMMIT_length'); save('${idBIDS}_space-dwi_desc-iFOD2-${tracts}_tractography_COMMIT-filtered_volume.txt', 'COMMIT_weighttimeslength', '-ASCII'); exit"
+        
+            if [ "$nocleanup" == "FALSE" ]; then
+                rm -r ${proc_dwi}/COMMIT_init/dict/dict*
+            fi
         fi
     done
-
 fi
 
 # -----------------------------------------------------------------------------------------------
@@ -352,7 +439,13 @@ if [[ ${filter} == "FALSE" ]]; then
     for seg in "${parcellations[@]}"; do
         parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
         connectome_str="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}_desc-iFOD2-${tracts}-${filter_name}"
-        lut="${util_lut}/lut_${parc_name}_mics.csv"
+        if [[ $parc_name =~ gpip_200p ]]; then
+            lut="${util_lut}/lut_schaefer-200_mics.csv"
+        elif [[ $parc_name =~ gpip_400p ]]; then
+            lut="${util_lut}/lut_schaefer-400_mics.csv"
+        else
+            lut="${util_lut}/lut_${parc_name}_mics.csv"
+        fi
         dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
         dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
         dwi_all="${tmp}/${idBIDS}_${parc_name}-full_dwi.nii.gz"
@@ -388,7 +481,13 @@ for filter_name in $filter_types; do
     for seg in "${parcellations[@]}"; do
         parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
         connectome_str="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}_desc-iFOD2-${tracts}-${filter_name}"
-        lut="${util_lut}/lut_${parc_name}_mics.csv"
+        if [[ $parc_name =~ gpip_200p ]]; then
+            lut="${util_lut}/lut_schaefer-200_mics.csv"
+        elif [[ $parc_name =~ gpip_400p ]]; then
+            lut="${util_lut}/lut_schaefer-400_mics.csv"
+        else
+            lut="${util_lut}/lut_${parc_name}_mics.csv"
+        fi
         dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
         dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
         dwi_all="${tmp}/${idBIDS}_${parc_name}-full_dwi.nii.gz"

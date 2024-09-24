@@ -21,6 +21,8 @@ ID  		= sys.argv[1]
 in_dir   	= sys.argv[2]
 tmp_dir     = sys.argv[3]
 reg_lambda 	= sys.argv[4]
+para_diff   = float(sys.argv[5])
+iso_diff    = float(sys.argv[6])
 
 print(".\n *** Initializing COMMIT for: ", ID)
 print(".\n *** Lambda value: ", reg_lambda)
@@ -82,9 +84,10 @@ mit.load_data(
 
 # use a forward-model with 1 Stick for the streamlines and 2 Balls for all the rest
 mit.set_model( 'StickZeppelinBall' )
-d_par       = 1.7E-3             # Parallel diffusivity [mm^2/s]
-d_perps_zep = []                 # Perpendicular diffusivity(s) [mm^2/s]
-d_isos      = [ 1.7E-3, 3.0E-3 ] # Isotropic diffusivity(s) [mm^2/s]
+d_par   = para_diff                                                                     # Parallel diffusivity [mm^2/s]
+d_perps = [ ]                                                                           # Perpendicular diffusivity(s) [mm^2/s]
+d_isos  = [ 1.7E-3, iso_diff ]                                                          # Isotropic diffusivity(s) [mm^2/s]
+
 mit.model.set( d_par, d_perps_zep, d_isos )
 
 mit.generate_kernels( regenerate=True )

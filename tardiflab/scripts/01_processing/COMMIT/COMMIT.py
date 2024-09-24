@@ -22,6 +22,9 @@ in_dir   	= sys.argv[2]
 tmp_dir     = sys.argv[3]
 out_dir     = sys.argv[4]
 tractogram  = sys.argv[5]
+para_diff   = float(sys.argv[6])
+perp_diff   = float(sys.argv[7])
+iso_diff    = float(sys.argv[8])
 
 print(".\n *** Initializing COMMIT for: ", ID)
 
@@ -64,9 +67,9 @@ mit.load_data(
 # set forward model
 mit.set_model( 'StickZeppelinBall' )                                                    # model described in (Panagiotaki et al., NeuroImage, 2012)
 
-d_par   = 1.7E-3                                                                        # Parallel diffusivity [mm^2/s]
-d_perps = [ 0.51E-3 ]                                                                   # Perpendicular diffusivity(s) [mm^2/s]
-d_isos  = [ 1.7E-3, 3.0E-3 ]                                                            # Isotropic diffusivity(s) [mm^2/s]
+d_par   = para_diff                                                                     # Parallel diffusivity [mm^2/s]
+d_perps = [ perp_diff ]                                                                 # Perpendicular diffusivity(s) [mm^2/s]
+d_isos  = [ 1.7E-3, iso_diff ]                                                          # Isotropic diffusivity(s) [mm^2/s]
 
 mit.model.set( d_par, d_perps, d_isos )
 mit.generate_kernels( regenerate=True )

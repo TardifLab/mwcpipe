@@ -33,8 +33,9 @@ Dual_bvals=${15}
 Dual_bvecs=${16}
 tractometry=${17}
 tck_imaging=${18}
-tractometry_input=${19}
-PROC=${20}
+diffusivity=${19}
+tractometry_input=${20}
+PROC=${21}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -206,12 +207,12 @@ fi
 COMMIT_AV_tck="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered.tck"
 COMMIT_AV_length="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered_length.txt"
 COMMIT_AV_weights="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered_weights.txt"
-COMMIT_AV_weighttimeslength="$proc_dwi/${idBIDS}_${init_tck_str}______-MySD-COMMITscaled-filtered_volume.txt"
+COMMIT_AV_weighttimeslength="$proc_dwi/${idBIDS}_${init_tck_str}-MySD-COMMITscaled-filtered_volume.txt"
 
 if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_AV_weighttimeslength ]]; then Info "Calculating AV using COMMIT"
 
     COMMIT=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/COMMIT.py
-    weights_COMMIT_AV=${proc_dwi}/COMMITscaledv2/dict/Results_StickZeppelinBall_AdvancedSolvers/streamline_weights.txt
+    weights_COMMIT_AV=${proc_dwi}/COMMITscaled/dict/Results_StickZeppelinBall_AdvancedSolvers/streamline_weights.txt
 
     bvecs=${tmp}/${idBIDS}_bvecs.txt
     bvals=${tmp}/${idBIDS}_bvals.txt
@@ -250,9 +251,19 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_AV_weighttimeslength ]]; then I
         Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask -force 
     fi
 
+    if [[ ${diffusivity} == "TRUE" ]]; then 
+        para_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_para_diff.txt)
+        perp_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_perp_diff.txt)
+        iso_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_iso_diff.txt)
+    elif [[ ${diffusivity} == "FALSE" ]]; then 
+        para_diff=1.7E-3
+        perp_diff=0.51E-3
+        iso_diff=3.0E-3
+    fi
+
     while [[ ! -f $weights_COMMIT_AV  ]] ; do
         Info "Running COMMIT"
-        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp $proc_dwi/COMMITscaledv2 $MySD_tck 
+        /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp $proc_dwi/COMMITscaled $MySD_tck $para_diff $perp_diff $iso_diff
         # Removing streamlines whose weights are too low
       	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_COMMIT_AV $MySD_tck $COMMIT_AV_tck -force
         # Testing if MySD ran into any issues

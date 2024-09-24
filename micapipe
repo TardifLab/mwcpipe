@@ -129,6 +129,7 @@ echo -e "
 \t\t\t\t         (If there are multiple filters, put all of them in a single argument! e.g., -filter 'SIFT2 COMMIT') 
 \t\t\t\t         (COMMIT or COMMIT2 option is required if running proc_COMMIT after) 
 \t\t\033[38;5;120m-reg_lambda\033[0m          : Regularization parameter lambda required for COMMIT2
+\t\t\033[38;5;120m-sub_diff\033[0m            : Option to calculate subject specific diffusivities 
 \t\t\033[38;5;120m-tractometry\033[0m         : Option to perform tractometry using the generated tractogram 
 \t\t\t\t         (If there are multiple images, put all of them in a single argument! e.g., -tractometry 'image1 image2 image3') 
 \t\t\033[38;5;120m-aparc_nodes\033[0m         : Option to use subject's aparc cortical parcel from post-structural when generating nodes for COMMIT
@@ -389,6 +390,10 @@ do
     aparc_nodes=TRUE
     shift
   ;;
+  -sub_diff)
+    sub_diff=TRUE
+    shift
+  ;;
   -GD)
     postGD=TRUE
     shift
@@ -644,6 +649,7 @@ if [ -z ${keep_tck} ]; then keep_tck=FALSE; else keep_tck=TRUE; fi
 if [ -z ${tractometry} ]; then tractometry=FALSE; else tractometry=TRUE; fi
 if [ -z ${reg_lambda} ]; then reg_lambda=FALSE; else reg_lambda=$reg_lambda_input; fi
 if [ -z ${filter} ]; then filter=FALSE; else filter=TRUE; fi
+if [ -z ${sub_diff} ]; then sub_diff=FALSE; else sub_diff=TRUE; fi
 if [ -z ${aparc_nodes} ]; then aparc_nodes=FALSE; else aparc_nodes=TRUE; fi
 
 # Optional arguments pre-COMMIT and proc_COMMIT
@@ -1010,7 +1016,7 @@ fi
 #   REQUIRES -proc_dwi 
 if [ "$ALL" = "TRUE" ] || [ "$postDWI" = "TRUE" ]; then
     log_file_str=$dir_logs/SC_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/03_SC.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $tracts $autoTract $keep_tck $dwi_str $filter $reg_lambda $tractometry $aparc_nodes"
+    COMMAND="${scriptDir}/03_SC.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $tracts $autoTract $keep_tck $dwi_str $filter $reg_lambda $tractometry $aparc_nodes $sub_diff"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - POST DWI processing (tractography)"
@@ -1068,7 +1074,7 @@ fi
 #   REQUIRES -pre_COMMIT 
 if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
     log_file_str=$dir_logs/proc_COMMIT_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/04_proc-COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat $gratiotractometry $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry $tck_imaging"
+    COMMAND="${scriptDir}/04_proc-COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat $gratiotractometry $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry $tck_imaging $sub_diff"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Tract-specific processing (COMMIT)"
