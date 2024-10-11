@@ -233,7 +233,6 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_AV_weighttimeslength ]]; then I
         dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
         dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
 
-
         dwi_b0_down="${tmp}/${idBIDS}_space-dwi_desc-b0.nii.gz"
         dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0_down" -axis 3 -force
         Do_cmd fslmaths $MTsat -nan -mul $alpha_value $MVFimage
@@ -243,8 +242,9 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_AV_weighttimeslength ]]; then I
         Do_cmd mrmath $tmp/b0s_down.mif mean -axis 3 $tmp/mean_b0s_down.mif
         Do_cmd mrcalc $dwi_corr $tmp/scaling_1.nii.gz -mult $tmp/mean_b0s_down.mif -div $tmp/dwi_down_scaled_norm.mif -force
         Do_cmd mrcalc $tmp/dwi_down_scaled_norm.mif -finite $tmp/dwi_down_scaled_norm.mif 0.0 -if $tmp/dwi_down_scaled_norm_nonan.mif
+        Do_cmd mrcalc $tmp/dwi_down_scaled_norm_nonan.mif 2 -lt $tmp/dwi_down_scaled_norm_nonan.mif 0.0 -if 0 -gt $tmp/dwi_down_scaled_norm_nonan.mif 0.0 -if $tmp/dwi_down_scaled_norm_nonan_0_2.mif
         voxel=($(mrinfo $T1nativepro -spacing))
-        Do_cmd mrgrid $tmp/dwi_down_scaled_norm_nonan.mif regrid -voxel $voxel $tmp/dwi_up_scaled_norm.mif -force
+        Do_cmd mrgrid $tmp/dwi_down_scaled_norm_nonan_0_2.mif regrid -voxel $voxel $tmp/dwi_up_scaled_norm.mif -force
 
         Do_cmd mrconvert $tmp/dwi_up_scaled_norm.mif -export_grad_fsl $bvecs $bvals $tmp/${idBIDS}_dwi_upscaled.nii.gz -force
         Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii -force
@@ -319,10 +319,9 @@ fi
 
 # -----------------------------------------------------------------------------------------------
 # g-Ratio tractometry through NODDI
-
+weights_gratio="${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap_track_weight.csv"
 if [[ "$gratiotractometry" == "TRUE" ]]; then
     gratiomap=${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap.nii.gz
-    weights_gratio="${proc_dwi}/${idBIDS}_space-dwi_desc-NODDI-gratiomap_track_weight.csv"
     alphaNODDI_value=$(cat $alpha_NODDI)
 
     if [[ ! -f "$weights_gratio" ]]; then
@@ -713,6 +712,7 @@ if [[ ${tractometry}  == "TRUE" ]]; then
                 Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_subc" -add "$dwi_cortex" "$dwi_cortexSub" -odt int # added the subcortical parcellation
                 Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int # added the cerebellar parcellation
             fi
+
             if [[ ! -f "${connectome_str}${image_str}-tractometry_full-connectome.txt" ]]; then
                 option1="-scale_file $weights_image -stat_edge mean"
                 build_connectomes "$tractometry_tck" "$dwi_all" "${connectome_str}${image_str}-tractometry_full" "$option1"
@@ -768,7 +768,6 @@ if [[ ${tck_imaging}  == "TRUE"  ]]; then
     Do_cmd tck2connectome ${proc_dwi}/roi_image/filt.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/nos.txt -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/filt_tract_assignments.txt  
 
 fi
-
 
 # -----------------------------------------------------------------------------------------------
 # QC notification of completition
