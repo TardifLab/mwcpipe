@@ -202,7 +202,10 @@ if [[ "$dwi_processed" == "FALSE" ]] && [[ ! -f "$dwi_corr" ]]; then
           dwi_dns_tmp="${tmp}/MP-PCA_dwi.mif"
           Do_cmd dwidenoise "$dwi_cat" "$dwi_dns_tmp" -nthreads "$threads"
           mrcalc "$dwi_cat" "$dwi_dns_tmp" -subtract - -nthreads "$threads" | mrmath - mean "$dwi_res" -axis 3
-          Do_cmd mrdegibbs "$dwi_dns_tmp" "$dwi_dns" -nthreads "$threads"
+          #Do_cmd mrdegibbs "$dwi_dns_tmp" "$dwi_dns" -nthreads "$threads"
+          Do_cmd mrconvert $dwi_dns_tmp -export_grad_fsl ${tmp}/dwi.bvec ${tmp}/dwi.bval -json_export $tmp/dwi.json $tmp/dwi_dns.nii.gz
+          matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/rpg_degibbs')); degibbs = rpg_degibbs(niftiread('${tmp}/dwi_dns.nii.gz'), 2, 6/8); info = niftiinfo('${tmp}/dwi_dns.nii.gz'); niftiwrite(degibbs, '${tmp}/dwi_dns_dgs.nii', info); exit"
+          Do_cmd mrconvert ${tmp}/dwi_dns_dgs.nii -fslgrad ${tmp}/dwi.bvec ${tmp}/dwi.bval -json_import $tmp/dwi.json $dwi_dns
           mrcalc "$dwi_dns_tmp" "$dwi_dns" -subtract - -nthreads "$threads" | mrmath - mean "$dwi_resGibss" -axis 3
           Do_cmd mrinfo "$dwi_dns" -json_all "${dwi_dns/mif/json}"
           Do_cmd mrinfo "$dwi_res" -json_all "${dwi_res/mif/json}"
@@ -280,7 +283,18 @@ if [[ "$dwi_processed" == "FALSE" ]] && [[ ! -f "$dwi_corr" ]]; then
 
           # Denoise DWI and calculate residuals
           Info "DWI-rpe: MP-PCA denoising and Gibbs ringing correction"
-          Do_cmd mrdegibbs "$rpe_dns_tmp" "$rpe_dns" -nthreads "$threads"
+
+          Do_cmd mrconvert $rpe_dns_tmp -json_export $tmp/rpe_dwi.json $tmp/rpe_dwi_dns.nii.gz
+#          Do_cmd mrdegibbs "$rpe_dns_tmp" "$rpe_dns" -nthreads "$threads"
+          matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/rpg_degibbs')); degibbs = rpg_degibbs(niftiread('${tmp}/rpe_dwi_dns.nii.gz'), 2, 6/8); info = niftiinfo('${tmp}/rpe_dwi_dns.nii.gz'); niftiwrite(degibbs, '${tmp}/rpe_dwi_dns_dgs.nii', info); exit"
+
+            if [[ -f "${bids_dwi_str}.bvec" ]] && [[ -f "${bids_dwi_str}.bval" ]]; then
+              Do_cmd mrconvert "${tmp}/rpe_dwi_dns_dgs.nii" -json_import "$tmp/rpe_dwi.json" -fslgrad "${bids_dwi_str}.bvec" "${bids_dwi_str}.bval" "$rpe_dns"
+            else
+              Do_cmd mrconvert "${tmp}/rpe_dwi_dns_dgs.nii" -json_import "$tmp/rpe_dwi.json" "$rpe_dns"
+            fi 
+
+
           Do_cmd mrinfo "$rpe_dns" -json_all "${rpe_dns/mif/json}"
     else
           Info "Subject ${id} has DWI-rpe in mif, denoised and concatenaded"
