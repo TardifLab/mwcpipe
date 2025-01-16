@@ -43,7 +43,7 @@ sesAnat=${19}
 regAffine=${20}
 dropTR=${21}
 noFC=${22}
-trainClassifier=${23}
+stopAtFix=${23}
 PROC=${24}
 export OMP_NUM_THREADS=$threads
 here=$(pwd)
@@ -89,7 +89,7 @@ Note "Phase scan       :" "$func_pe"
 Note "Reverse Phase    :" "$func_rpe"
 Note "Smoothing        :" "$smooth"
 Note "No FIX           :" "$noFIX"
-Note "Stop at FIX      :" "$trainClassifier"
+Note "Stop at FIX      :" "$stopAtFix"
 Note "Perform NSR      :" "$performNSR"
 Note "Perform GSR      :" "$performGSR"
 Note "Longitudinal ses :" "$sesAnat"
@@ -215,8 +215,8 @@ else
 fi
 
 # Check Classifier training
-if [[ "$trainClassifier" -eq 1 ]]; then
-    Info "Func processing will stop at FIX to allow manual IC labeling and classifier training"
+if [[ "$stopAtFix" -eq 1 ]]; then
+    Info "Func processing will stop at FIX to allow manual IC labeling / classifier training"
 else
     Info "Func processing will proceed through FIX according to your input to noFIX"
 fi
@@ -699,7 +699,7 @@ fi
 
 #------------------------------------------------------------------------------#
 # Check if processing should stop here to allow manual IC labeling and FIX classifier training (Tardiflab mod)
-if [[ "$trainClassifier" -eq 1 ]]; then Info "Halting func processing here to allow manual IC labeling and FIX classifier training"; exit ; fi
+if [[ "$stopAtFix" -eq 1 ]]; then Info "Halting func processing here to allow manual IC labeling / FIX classifier training"; exit ; fi
 
 # run ICA-FIX IF melodic ran succesfully
 fix_output="${func_ICA}/filtered_func_data_clean.nii.gz"

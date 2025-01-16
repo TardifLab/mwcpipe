@@ -108,7 +108,7 @@ echo -e "
 \t\t\t\t         ( default = no global, white matter and CSF signal regression )
 \t\t\033[38;5;120m-noFIX\033[0m               : Specify this option to skip ICA-FIX processing.
 \t\t\t\t         ( default = FIX is run with specified training file )
-\t\t\033[38;5;120m-trainClassifier\033[0m     : Specify this option to stop func processing at FIX to allow manual IC labelinga and classifier training.
+\t\t\033[38;5;120m-stopAtFix\033[0m           : Specify this option to stop func processing at FIX to allow manual IC labeling and/or classifier training.
 \t\t\t\t         ( default = FIX runs using your specified training file )
 \t\t\033[38;5;120m-icafixTraining\033[0m      : Path to specified ICA-FIX training file for nuisance signal regression ( file.RData )
 \t\t\t\t         ( default = \$MICAPIPE/functions/MICAMTL_training_15HC_15PX.RData )
@@ -146,7 +146,8 @@ echo -e "
 \t\033[38;5;197m-proc_COMMIT\033[0m
 \t\t\033[38;5;120m-MTsat\033[0m               : MTsat image 
 \t\t\t\t         (MTsat image required if performing MySD or g-ratio) 
-\t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (BIDS format: {sub}_{ses}) that will be used to calibrate the alpha factor for MVF calculation
+\t\t\033[38;5;120m-MVFalpha_list\033[0m       : List of subjects (txt file where each new line specifies a subject in BIDS format: {sub}_{ses}) that will be used to calibrate the alpha factor for MVF calculation
+\t\t\033[38;5;120m-validate_tck\033[0m        : Remove any invalid streamlines from the input tractogram (i.e. streamlines with one or both endpoints outside a node)
 \t\t\033[38;5;120m-MySD\033[0m                : Run MySD and calculate tract-specific myelin volume
 \t\t\033[38;5;120m-gratio\033[0m              : Run MySD and COMMIT (modified to obtain axon volume), and calculate tract-specific g-ratio
 \t\t\033[38;5;120m-gratiotractometry\033[0m   : Obtain g-ratio tractometry through NODDI
@@ -347,7 +348,7 @@ do
     skipFIX=TRUE
     shift
   ;;
-  -trainClassifier)
+  -stopAtFix)
     pauseFIX=TRUE
     shift
   ;;
@@ -425,6 +426,10 @@ do
   ;;
   -gratiotractometry)
     gratiotractometry=TRUE
+    shift
+  ;;
+  -validate_tck)
+    validate_tck=TRUE
     shift
   ;;
   -MTsat)
@@ -624,7 +629,7 @@ if [[ $smoothWB == "TRUE" ]]; then wbSmoothing=1; else wbSmoothing=0; fi
 if [[ $NSR == "TRUE" ]]; then performNSR=1; else performNSR=0; fi
 if [[ $GSReg == "TRUE" ]]; then performGSR=1; else performGSR=0; fi
 if [[ $skipFIX == "TRUE" ]]; then noFIX=1; else noFIX=0; fi
-if [[ $pauseFIX == "TRUE" ]]; then trainClassifier=1; else trainClassifier=0; fi 					# Tardiflab mod
+if [[ $pauseFIX == "TRUE" ]]; then stopAtFix=1; else stopAtFix=0; fi 					# Tardiflab mod
 if [[ $dropTR == "TRUE" ]]; then dropTR=TRUE; else dropTR=FALSE; fi
 if [ -z "$mainScanStr" ]; then mainScanStr=DEFAULT; fi
 if [ -z "$func_pe" ]; then func_pe=DEFAULT; else func_pe=$(realpath $func_pe); fi
@@ -665,6 +670,7 @@ if [ -z ${Dual_bvals} ]; then Dual_bvals=FALSE; else Dual_bvals=$Dual_bvals; fi
 if [ -z ${Dual_bvecs} ]; then Dual_bvecs=FALSE; else Dual_bvecs=$Dual_bvecs; fi
 if [ -z ${MTsat} ]; then MTsat=FALSE; else MTsat=$MTsat_input; fi
 if [ -z ${tck_imaging} ]; then tck_imaging=FALSE; else tck_imaging=TRUE; fi
+if [ -z ${validate_tck} ]; then validate_tck=FALSE; else validate_tck=TRUE; fi
 
 # Optional arguments proc_dwi
 # User provided DWI main phase
@@ -1074,7 +1080,7 @@ fi
 #   REQUIRES -pre_COMMIT 
 if [ "$ALL" = "TRUE" ] || [ "$proc_COMMIT" = "TRUE" ]; then
     log_file_str=$dir_logs/proc_COMMIT_$(date +'%d-%m-%Y')
-    COMMAND="${scriptDir}/04_proc-COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat $gratiotractometry $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry $tck_imaging $sub_diff"
+    COMMAND="${scriptDir}/04_proc-COMMIT.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir $MVFalpha_list $MySD $gratio $MTsat $gratiotractometry $Dual_MTON $Dual_MTOFF $Dual_bvals $Dual_bvecs $tractometry $tck_imaging $sub_diff $validate_tck"
     # mica.q - post-DWI processing (tractography)
     if [[ $micaq == "TRUE" ]]; then
         Info "MICA qsub - Tract-specific processing (COMMIT)"
@@ -1103,7 +1109,7 @@ fi
 if [ "$ALL" = "TRUE" ] || [ "$procFunc" = "TRUE" ]; then
     rand=${RANDOM}
     log_file_str=$dir_logs/proc_func_$(date +'%d-%m-%Y')"-${rand}"
-    COMMAND="${scriptDir}/02_proc-func.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir ${optarg_func[0]} ${optarg_func[1]} ${optarg_func[2]} ${optarg_func[3]} ${wbSmoothing} ${mainScanStr} ${func_pe} ${func_rpe} ${performNSR} ${performGSR} ${noFIX} ${sesAnat} ${regAffine} ${dropTR} ${noFC} ${trainClassifier}"
+    COMMAND="${scriptDir}/02_proc-func.sh $BIDS $id $out $SES $nocleanup $threads $tmpDir ${optarg_func[0]} ${optarg_func[1]} ${optarg_func[2]} ${optarg_func[3]} ${wbSmoothing} ${mainScanStr} ${func_pe} ${func_rpe} ${performNSR} ${performGSR} ${noFIX} ${sesAnat} ${regAffine} ${dropTR} ${noFC} ${stopAtFix}"
     jobName="q${rand}_fun"
     # mica.q - functional processing
     if [[ $micaq == "TRUE" ]]; then
