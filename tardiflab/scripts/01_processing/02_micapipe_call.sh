@@ -60,7 +60,6 @@ elif [ "$2" == SC ] ; then
         		-tracts 3M \
                 -filter COMMIT \
                 -reg_lambda 15e-1 \
-              	-tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii" \
               	-SC
 
 elif [ "$2" == pre_COMMIT ] ; then
@@ -71,7 +70,7 @@ elif [ "$2" == pre_COMMIT ] ; then
               	-bids $RAW_DIR \
               	-ses $SESSION \
               	-MTsat "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii" \
-              	-MVFalpha_list $MVFlist \
+              	-MVFalpha_list "/data_/tardiflab/wenda/mwc/dummylist" \
               	-gratio \
               	-gratiotractometry \
               	-pre_COMMIT
@@ -86,9 +85,9 @@ elif [ "$2" == proc_COMMIT ] ; then
                 -MTsat "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii" \
 		        -gratio \
                 -gratiotractometry \
-		        -MVFalpha_list $MVFlist \
-                -tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii ${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_R1map.nii.gz" \
                 -tck_imaging \
+		        -MVFalpha_list "/data_/tardiflab/wenda/mwc/dummylist" \
+                -tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii ${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_R1map.nii.gz" \
                 -proc_COMMIT
 
 #                -Dual_MTON "/data_/tardiflab/mwc/hc${1}r/Diffusion/preprocessing/dwi_MT_on_dn_dw_db.nii.gz" \
@@ -113,6 +112,8 @@ elif [ "$2" == FC ] ; then
 		-nocleanup \
 		-NSR \
 		-dropTR \
-		-trainClassifier \
+#		-trainClassifier \          # use on first pass when need to compute ICs
+		-manual_ICRemoval \         # use this & noFIX on 2nd pass when manual labeling is done
+		-noFIX \
                 -proc_func
 fi
