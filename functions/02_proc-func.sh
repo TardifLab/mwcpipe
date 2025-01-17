@@ -44,7 +44,8 @@ regAffine=${20}
 dropTR=${21}
 noFC=${22}
 stopAtFix=${23}
-PROC=${24}
+manual_ICRemoval=${24}
+PROC=${25}
 export OMP_NUM_THREADS=$threads
 here=$(pwd)
 
@@ -90,6 +91,7 @@ Note "Reverse Phase    :" "$func_rpe"
 Note "Smoothing        :" "$smooth"
 Note "No FIX           :" "$noFIX"
 Note "Stop at FIX      :" "$stopAtFix"
+Note "Manual IC removal:" "$manual_ICRemoval"
 Note "Perform NSR      :" "$performNSR"
 Note "Perform GSR      :" "$performGSR"
 Note "Longitudinal ses :" "$sesAnat"
@@ -217,6 +219,13 @@ fi
 # Check Classifier training
 if [[ "$stopAtFix" -eq 1 ]]; then
     Info "Func processing will stop at FIX to allow manual IC labeling / classifier training"
+else
+    Info "Func processing will proceed through FIX according to your input to noFIX"
+fi
+
+# Check for manual IC removal instead of FIX
+if [[ "$manual_ICRemoval" -eq 1 ]]; then
+    Info "Func processing will skip FIX and instead perform manual IC removal (note: noFIX should be set to 1 and the appropriate files should be provided)"
 else
     Info "Func processing will proceed through FIX according to your input to noFIX"
 fi
@@ -770,12 +779,28 @@ if [[ "$noFIX" -eq 0 ]]; then
         Info "Subject ${id} has a clean fMRI processed. FIX: ${statusFIX}";
     fi
     json_func "${func_proc_json}"
+# -----------------------------------------------------------------------------------------------------            <------- Tardiflab mod section (MCN)
 else
-    # Skip FIX processing but rename variables anyways for simplicity
-    Info "Clean fMRI image has been processed (no FIX)."
-    cp -rf "${fmri_HP}" "$func_processed"
-    if [[ "$noFIX" -eq 1 ]]; then export statusFIX="NO"; fi
-    json_func "${func_proc_json}"
+    # Check if manual denoising is desired
+    if [[ "$manual_ICRemoval" -eq 1 ]]; then
+	Info "Manual IC removal! No Fix."
+
+	# Get IC indices marked for removal for this subject & session
+	iclblfile="/data_/tardiflab/mwc/bids/derivatives/micapipe/tmp_micapipe/02_proc-func/ic_lblFinalOutput.txt"	# File with all IC indices for removal (better in utilities?)
+	source "/data_/tardiflab/mwc/mwcpipe/tardiflab/scripts/01_processing/iclbl_9_getICs_byID.sh"              	# Custom function for reading out ICs for removal
+	iclbls=$(getICs_by_id "$iclblfile" "$idBID}")
+
+	# Remove ICs
+	mixdir="${func_ICA}/filtered_func_data.ica/melodic_mix"
+  	fsl_regfilt -i "$fmri_filtered" -o "$func_processed" -d "$mixdir" -f "$iclbls"
+#-------------------------------------------------------------------------------------------------------
+    else
+    	# Skip FIX processing but rename variables anyways for simplicity
+    	Info "Clean fMRI image has been processed (no FIX)."
+    	cp -rf "${fmri_HP}" "$func_processed"
+    	if [[ "$noFIX" -eq 1 ]]; then export statusFIX="NO"; fi
+    	json_func "${func_proc_json}"
+    fi
 fi
 
 #------------------------------------------------------------------------------#
