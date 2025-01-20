@@ -102,18 +102,37 @@ elif [ "$2" == proc_COMMIT ] ; then
 #                -tractometry "${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_MTsat.nii ${OUT_DIR}/matlab/sub-${1}/${SESSION}/anat/sub-${1}_${SESSION}_R1map.nii.gz" \
 #                -tck_imaging \
 
+
+
+# -*-*-*-     resting state fMRI & FC processing    -*-*-*-
+
+#elif [ "$2" == FC ] ; then
+#      # Run this version on your 1st pass when you plan to label components manually (trainClassifier will stop processing at FIX)
+#        ${MICAPIPE}/micapipe \
+#                -sub $1 \
+#                -out $OUT_DIR \
+#                -bids $RAW_DIR \
+#                -ses $SESSION \
+#		-nocleanup \
+#		-NSR \
+#		-dropTR \
+#		-trainClassifier \
+#		-noFIX \
+#                -proc_func
+
+
 elif [ "$2" == FC ] ; then
-      # resting state fMRI & FC processing
+      # Run this version on your 2nd pass after you finish manually labeling ICs for denoising (manual_ICRemoval uses you labels to remove components)
         ${MICAPIPE}/micapipe \
                 -sub $1 \
                 -out $OUT_DIR \
                 -bids $RAW_DIR \
                 -ses $SESSION \
-		-nocleanup \
-		-NSR \
-		-dropTR \
-#		-trainClassifier \          # use on first pass when need to compute ICs
-		-manual_ICRemoval \         # use this & noFIX on 2nd pass when manual labeling is done
-		-noFIX \
+                -nocleanup \
+                -NSR \
+                -dropTR \
+                -manual_ICRemoval \
+                -noFIX \
                 -proc_func
+
 fi
