@@ -733,7 +733,7 @@ if [[ "$noFIX" -eq 0 ]]; then
               # REQUIRED by FIX - reg/highres2example_func.mat                                               	# FLIRT transform from structural to functional space
               if [[ ! -f "${func_ICA}/reg/highres2example_func.mat" ]]; then
                   # Get transformation matrix T1native to func space (ICA-FIX requirement)
-                  Do_cmd antsApplyTransforms -v 1 -o Linear["$tmp/highres2example_func.mat",0] "${xfmat}"
+                  Do_cmd antsApplyTransforms -v 1 -o Linear["$tmp/highres2example_func.mat",0] ${xfmat}
                   # Transform matrix: ANTs (itk binary) to text
                   Do_cmd ConvertTransformFile 3 "$tmp/highres2example_func.mat" "$tmp/highres2example_func.txt"
 
@@ -779,8 +779,9 @@ if [[ "$noFIX" -eq 0 ]]; then
         Info "Subject ${id} has a clean fMRI processed. FIX: ${statusFIX}";
     fi
     json_func "${func_proc_json}"
-# -----------------------------------------------------------------------------------------------------            <------- Tardiflab mod section (MCN)
 else
+    # -----------------------------------------------------------------------------------------------------            <------- Tardiflab mod section (MCN)
+    # Skipping FIX
     # Check if manual denoising is desired
     if [[ "$manual_ICRemoval" -eq 1 ]]; then
 	Info "Manual IC removal! No Fix."
@@ -788,12 +789,18 @@ else
 	# Get IC indices marked for removal for this subject & session
 	iclblfile="/data_/tardiflab/mwc/bids/derivatives/micapipe/tmp_micapipe/02_proc-func/ic_lblFinalOutput.txt"	# File with all IC indices for removal (better in utilities?)
 	source "/data_/tardiflab/mwc/mwcpipe/tardiflab/scripts/01_processing/iclbl_9_getICs_byID.sh"              	# Custom function for reading out ICs for removal
-	iclbls=$(getICs_by_id "$iclblfile" "$idBID}")
+	iclbls=$(getICs_by_id "$iclblfile" "$idBIDS")
 
 	# Remove ICs
 	mixdir="${func_ICA}/filtered_func_data.ica/melodic_mix"
-  	fsl_regfilt -i "$fmri_filtered" -o "$func_processed" -d "$mixdir" -f "$iclbls"
-#-------------------------------------------------------------------------------------------------------
+  	Do_cmd fsl_regfilt -i "$fmri_filtered" -o "$fix_output" -d "$mixdir" -f "$iclbls"
+
+	# Reorient LPI
+ 	Do_cmd 3dresample -orient LPI -prefix "$func_processed" -inset "$fix_output"
+
+	export statusFIX="NO"
+	json_func "${func_proc_json}"
+    #-------------------------------------------------------------------------------------------------------
     else
     	# Skip FIX processing but rename variables anyways for simplicity
     	Info "Clean fMRI image has been processed (no FIX)."
