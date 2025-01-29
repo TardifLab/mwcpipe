@@ -280,11 +280,12 @@ if [[ ${filter} == "TRUE" ]]; then
                 Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v
 
             elif [[ ! -f "$tmp/${idBIDS}_nodes.nii.gz" ]] && [[ ${aparc_nodes} == "TRUE" ]]; then 
-                Info "Creating nodes for COMMIT using FSL's subcortical segmentation and subject's aparc cortical parcel, both in DWI-space"            
+                Info "Creating nodes for COMMIT using FSL's subcortical and cerebellar segmentations, plus subject's aparc cortical parcel, all in DWI-space"            
                 aparc=${dir_volum}/${idBIDS}_space-nativepro_t1w_atlas-aparc.nii.gz
                 aparc_str=$(basename ${aparc/.nii.gz/})
                 Do_cmd antsApplyTransforms -d 3 -e 3 -i "$aparc" -r "${dwi_b0}" -n GenericLabel "$trans_T12dwi" -o "$tmp/${aparc_str}-cor_dwi.nii.gz" -v -u int
-                fslmaths $dwi_subc -add "$tmp/${aparc_str}-cor_dwi.nii.gz" $tmp/${idBIDS}_nodes.nii.gz
+                fslmaths $dwi_subc -add "$tmp/${aparc_str}-cor_dwi.nii.gz" -add $dwi_cere $tmp/${idBIDS}_nodes.nii.gz
+                fslmaths $tmp/${idBIDS}_nodes.nii.gz -bin $tmp/${idBIDS}_nodes.nii.gz
             fi
 
             # Generate prerequisite DWI derivatives for COMMIT
@@ -355,7 +356,6 @@ if [[ ${filter} == "TRUE" ]]; then
                 Do_cmd tck2connectome $tck $tmp/${idBIDS}_DK-85-full_dwi_bin.nii.gz ${tmp}/nos.txt -quiet -out_assignments ${tmp}/tck_assignments.txt
                 Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck_unused.tck -files single -nodes 0 -keep_self
                 Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -nodes 1 -keep_self
-#                Do_cmd tck2connectome $tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${tmp}/nos.txt -quiet -out_assignments ${tmp}/tck_assignments.txt
 #                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -nodes 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85
                 counter=0 # Counter to track number of times COMMIT has been run
                 while [[ ! -f $weights_commit && counter -lt 3 ]] ; do #Sometimes run into an error with COMMIT outputs, rerunning it seems to fix it
@@ -387,8 +387,8 @@ if [[ ${filter} == "TRUE" ]]; then
             if [[ ! -f $weights_commit  ]]; then # Same protocol as previous if-statement, but with nodes defined using the aparc cortical parcel
                 Info "Running COMMIT"
                 Do_cmd tck2connectome $tck $tmp/${idBIDS}_nodes.nii.gz ${tmp}/nos.txt -quiet -out_assignments ${tmp}/tck_assignments.txt
-                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -keep_self
-                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck_unused.tck -files single -nodes 0 -keep_self
+                Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck.tck -files single -nodes 1,1 -keep_self # As with previous if-statement, only keep streamlines connecting two nodes
+                #Do_cmd connectome2tck $tck ${tmp}/tck_assignments.txt ${tmp}/filt_tck_unused.tck -files single -nodes 0 -keep_self
                 counter=0 # Counter to track number of times COMMIT has been run
                 while [[ ! -f $weights_commit && counter -lt 3 ]]; do
                     counter=$((counter + 1))
@@ -419,6 +419,13 @@ if [[ ${filter} == "TRUE" ]]; then
     done
 fi
 
+if [[ $aparc_nodes == "TRUE" ]]; then
+    Info "Ending processing early because script is running on cluster. Need to generate connectomes locally for now..."
+    for i in $tmp/*;do
+        rm $i
+    done
+    exit
+fi
 # -----------------------------------------------------------------------------------------------
 # Build the Connectomes
 function build_connectomes(){

@@ -34,8 +34,9 @@ Dual_bvecs=${16}
 tractometry=${17}
 tck_imaging=${18}
 diffusivity=${19}
-tractometry_input=${20}
-PROC=${21}
+validate_tck=${20}
+tractometry_input=${21}
+PROC=${22}
 here=$(pwd)
 
 #------------------------------------------------------------------------------#
@@ -53,7 +54,7 @@ bids_variables "$BIDS" "$id" "$out" "$SES"
 
 # Check inputs: DWI post TRACTOGRAPHY
 if [ -e ${proc_dwi}/${idBIDS}_space-dwi_desc-*_tractography_COMMIT-filtered.tck ]; then
-    init_tck=$(ls ${proc_dwi}/${idBIDS}_space-dwi_desc-*_tractography_COMMIT-filtered.tck)
+     init_tck=$(ls ${proc_dwi}/${idBIDS}_space-dwi_desc-*_tractography_COMMIT-filtered.tck)
 elif [ -e ${proc_dwi}/${idBIDS}_space-dwi_desc-*_tractography_COMMIT2-filtered.tck ]; then
     init_tck=$( ${proc_dwi}/${idBIDS}_space-dwi_desc-*_tractography_COMMIT2-filtered.tck)
 else
@@ -131,6 +132,46 @@ else
 fi
 
 # -----------------------------------------------------------------------------------------------
+# Remove invalid streamlines (i.e. streamlines with one or both endpoints outside a node)
+if [[ $validate_tck == "TRUE" ]] && [[ ! -f "${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-filtered.tck" ]]; then
+
+    Info "Creating nodes using FSL's subcortical and cerebellar segmentations, plus subject's aparc cortical parcel, all in DWI-space"
+    # Transformation matrices from nativespace to DWI-space
+    dwi_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_"
+    dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
+    dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
+    trans_T12dwi="-t ${dwi_SyN_warp} -t ${dwi_SyN_affine}"
+
+    # Transform aparc cortical parcel to DWI space 
+    dwi_b0="${proc_dwi}/${idBIDS}_space-dwi_desc-b0.nii.gz"         
+    aparc=${dir_volum}/${idBIDS}_space-nativepro_t1w_atlas-aparc.nii.gz
+    aparc_str=$(basename ${aparc/.nii.gz/})
+    Do_cmd antsApplyTransforms -d 3 -e 3 -i "$aparc" -r "${dwi_b0}" -n GenericLabel "$trans_T12dwi" -o "$tmp/${aparc_str}-cor_dwi.nii.gz" -v -u int
+
+    # Combine aparc cortical parcel in DWI space with subcortical and cerebellar parcels (also in DWI space)
+    dwi_cere="${proc_dwi}/${idBIDS}_space-dwi_atlas-cerebellum.nii.gz"
+    dwi_subc="${proc_dwi}/${idBIDS}_space-dwi_atlas-subcortical.nii.gz" 
+    Do_cmd fslmaths $dwi_subc -add "$tmp/${aparc_str}-cor_dwi.nii.gz" -add $dwi_cere $tmp/${idBIDS}_nodes.nii.gz
+    Do_cmd fslmaths $tmp/${idBIDS}_nodes.nii.gz -bin $tmp/${idBIDS}_nodes.nii.gz # Binarize so streamlines starting and ending at node '1' (i.e. any valid node) can be deemed valid
+
+    Info "Removing invalid streamlines from tractogram"
+    # Convert tck file to a connectome to reveal which streamlines are invalid, and then only keep valid streamlines in the tck file
+    Do_cmd tck2connectome $init_tck $tmp/${idBIDS}_nodes.nii.gz ${tmp}/nos.txt -quiet -out_assignments ${tmp}/tck_assignments.txt
+    Do_cmd connectome2tck $init_tck ${tmp}/tck_assignments.txt ${tmp}/valid_tck.tck -files single -nodes 1,1 -keep_self -quiet
+
+    # Save backup copy of original tck file in case validation causes issues (~2% of subjects lost almost all streamlines; re-running saw no such issues)
+    base=$(basename $init_tck)
+    dir_name=$(dirname $init_tck)
+    if [[ ! -f dir_name/"backup_"$base ]];then
+        Do_cmd cp $init_tck $dir_name/"backup_"$base
+    fi
+
+    # Replace the original tck file with the validated tck file
+    Do_cmd mv ${tmp}/valid_tck.tck $init_tck
+else
+    Info "Invalid streamlines were already removed or this option was not selected"
+fi
+# -----------------------------------------------------------------------------------------------
 # MySD filtering and weighting for tract-specific MTsat 
 MySD_tck="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-filtered.tck"
 MySD_length="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-filtered_length.txt"
@@ -144,7 +185,9 @@ if [[ ${gratio}  == "TRUE" || ${MySD}  == "TRUE" ]] && [[ ! -f $MySD_weighttimes
     f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
     wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
 
-    while [[ ! -f $weights_MySD  ]] ; do
+    counter=0
+    while [[ ! -f $weights_MySD && $counter -lt 3 ]] ; do
+        counter=$((counter + 1))
      	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask
         Info "Running MySD"
         /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $MySD $idBIDS $proc_dwi $tmp $proc_dwi/MySD $init_tck $MVF_COMMIT_in_dwi
@@ -222,46 +265,48 @@ if [[ ${gratio}  == "TRUE" ]] && [[ ! -f $COMMIT_AV_weighttimeslength ]]; then I
     f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
     wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
 
-    if [[ ! -f $tmp/${idBIDS}_dwi_upscaled.nii.gz ]]; then Info "Computing scaled dwi file"
-        
-        dwi_corr="$proc_dwi/${idBIDS}_space-dwi_desc-dwi_preproc.mif"
-        alpha_value=$(cat $alpha_COMMIT)
-        MVFimage="$tmp/${idBIDS}_MVF.nii.gz"
-        MVF_in_dwi_lowres="$tmp/${idBIDS}_space-dwi_desc-lowres_MVF.nii.gz"
-        dwi_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_"
-        dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
-        dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
-        dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
+    counter=0
+    while [[ ! -f $weights_COMMIT_AV && $counter -lt 3 ]]; do
+        counter=$((counter + 1))
+        if [[ ! -f $tmp/${idBIDS}_dwi_upscaled.nii.gz ]]; then Info "Computing scaled dwi file"
+            
+            dwi_corr="$proc_dwi/${idBIDS}_space-dwi_desc-dwi_preproc.mif"
+            alpha_value=$(cat $alpha_COMMIT)
+            MVFimage="$tmp/${idBIDS}_MVF.nii.gz"
+            MVF_in_dwi_lowres="$tmp/${idBIDS}_space-dwi_desc-lowres_MVF.nii.gz"
+            dwi_SyN_str="${dir_warp}/${idBIDS}_space-dwi_from-T1w_to-dwi_mode-image_desc-SyN_"
+            dwi_SyN_warp="${dwi_SyN_str}1Warp.nii.gz"
+            dwi_SyN_Invwarp="${dwi_SyN_str}1InverseWarp.nii.gz"
+            dwi_SyN_affine="${dwi_SyN_str}0GenericAffine.mat"
 
-        dwi_b0_down="${tmp}/${idBIDS}_space-dwi_desc-b0.nii.gz"
-        dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0_down" -axis 3 -force
-        Do_cmd fslmaths $MTsat -nan -mul $alpha_value $MVFimage
-        Do_cmd antsApplyTransforms -d 3 -i "$MVFimage" -r "$dwi_b0_down" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$MTsat2T1w_affine" -o "$MVF_in_dwi_lowres" -v
-        Do_cmd mrcalc 1 $MVF_in_dwi_lowres -subtract $tmp/scaling_1.nii.gz -force
-        Do_cmd dwiextract $dwi_corr -bzero $tmp/b0s_down.mif -force
-        Do_cmd mrmath $tmp/b0s_down.mif mean -axis 3 $tmp/mean_b0s_down.mif
-        Do_cmd mrcalc $dwi_corr $tmp/scaling_1.nii.gz -mult $tmp/mean_b0s_down.mif -div $tmp/dwi_down_scaled_norm.mif -force
-        Do_cmd mrcalc $tmp/dwi_down_scaled_norm.mif -finite $tmp/dwi_down_scaled_norm.mif 0.0 -if $tmp/dwi_down_scaled_norm_nonan.mif
-        Do_cmd mrcalc $tmp/dwi_down_scaled_norm_nonan.mif 2 -lt $tmp/dwi_down_scaled_norm_nonan.mif 0.0 -if 0 -gt $tmp/dwi_down_scaled_norm_nonan.mif 0.0 -if $tmp/dwi_down_scaled_norm_nonan_0_2.mif
-        voxel=($(mrinfo $T1nativepro -spacing))
-        Do_cmd mrgrid $tmp/dwi_down_scaled_norm_nonan_0_2.mif regrid -voxel $voxel $tmp/dwi_up_scaled_norm.mif -force
+            dwi_b0_down="${tmp}/${idBIDS}_space-dwi_desc-b0.nii.gz"
+            dwiextract -force -nthreads "$threads" "$dwi_corr" - -bzero | mrmath - mean "$dwi_b0_down" -axis 3 -force
+            Do_cmd fslmaths $MTsat -nan -mul $alpha_value $MVFimage
+            Do_cmd antsApplyTransforms -d 3 -i "$MVFimage" -r "$dwi_b0_down" -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$MTsat2T1w_affine" -o "$MVF_in_dwi_lowres" -v
+            Do_cmd mrcalc 1 $MVF_in_dwi_lowres -subtract $tmp/scaling_1.nii.gz -force
+            Do_cmd dwiextract $dwi_corr -bzero $tmp/b0s_down.mif -force
+            Do_cmd mrmath $tmp/b0s_down.mif mean -axis 3 $tmp/mean_b0s_down.mif
+            Do_cmd mrcalc $dwi_corr $tmp/scaling_1.nii.gz -mult $tmp/mean_b0s_down.mif -div $tmp/dwi_down_scaled_norm.mif -force
+            Do_cmd mrcalc $tmp/dwi_down_scaled_norm.mif -finite $tmp/dwi_down_scaled_norm.mif 0.0 -if $tmp/dwi_down_scaled_norm_nonan.mif
+            Do_cmd mrcalc $tmp/dwi_down_scaled_norm_nonan.mif 2 -lt $tmp/dwi_down_scaled_norm_nonan.mif 0.0 -if 0 -gt $tmp/dwi_down_scaled_norm_nonan.mif 0.0 -if $tmp/dwi_down_scaled_norm_nonan_0_2.mif
+            voxel=($(mrinfo $T1nativepro -spacing))
+            Do_cmd mrgrid $tmp/dwi_down_scaled_norm_nonan_0_2.mif regrid -voxel $voxel $tmp/dwi_up_scaled_norm.mif -force
 
-        Do_cmd mrconvert $tmp/dwi_up_scaled_norm.mif -export_grad_fsl $bvecs $bvals $tmp/${idBIDS}_dwi_upscaled.nii.gz -force
-        Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii -force
-        Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask -force 
-    fi
+            Do_cmd mrconvert $tmp/dwi_up_scaled_norm.mif -export_grad_fsl $bvecs $bvals $tmp/${idBIDS}_dwi_upscaled.nii.gz -force
+            Do_cmd mrconvert $wm_fod_mif -json_export $wm_fod_json $wm_fod_nii -force
+            Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask -force 
+        fi
 
-    if [[ ${diffusivity} == "TRUE" ]]; then 
-        para_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_para_diff.txt)
-        perp_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_perp_diff.txt)
-        iso_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_iso_diff.txt)
-    elif [[ ${diffusivity} == "FALSE" ]]; then 
-        para_diff=1.7E-3
-        perp_diff=0.51E-3
-        iso_diff=3.0E-3
-    fi
+        if [[ ${diffusivity} == "TRUE" ]]; then 
+            para_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_para_diff.txt)
+            perp_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_perp_diff.txt)
+            iso_diff=$(cat ${proc_dwi}/${idBIDS}_space-dwi_iso_diff.txt)
+        elif [[ ${diffusivity} == "FALSE" ]]; then 
+            para_diff=1.7E-3
+            perp_diff=0.51E-3
+            iso_diff=3.0E-3
+        fi
 
-    while [[ ! -f $weights_COMMIT_AV  ]] ; do
         Info "Running COMMIT"
         /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $COMMIT $idBIDS $proc_dwi $tmp $proc_dwi/COMMITscaled $MySD_tck $para_diff $perp_diff $iso_diff
         # Removing streamlines whose weights are too low
@@ -487,6 +532,14 @@ if [[ ${dual}  == "TRUE" ]] && [[ ! -f $DUAL_tck ]]; then Info "Prepping COMMIT 
 
 fi
 
+if [[ $validate_tck == "TRUE" ]]; then
+    Info "Ending processing early because script is running on cluster. Need to generate connectomes locally for now..."
+    for i in $tmp/*;do
+        rm $i
+    done
+    exit
+fi
+
 #-----------------------------Connectomes generation-----------------------------
 function build_connectomes(){
     tck=$1	
@@ -572,6 +625,11 @@ if [[ ${MySD}  == "TRUE" ]] || [[ ${gratio}  == "TRUE" ]]; then
         parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
         connectome_str_MySD="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}${tck_str}-MySD-filtered-"
         lut="${util_lut}/lut_${parc_name}_mics.csv"
+        if [[ $parc_name =~ gpip_200 ]];then
+            lut="${util_lut}/lut_schaefer-200_mics.csv"
+        elif [[ $parc_name =~ gpip_400 ]];then
+            lut="${util_lut}/lut_schaefer-400_mics.csv"
+        fi
         dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
         dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
         dwi_all="${tmp}/${idBIDS}_${parc_name}-full_dwi.nii.gz"
@@ -607,6 +665,11 @@ if [[ ${gratio}  == "TRUE" ]]; then
         connectome_str_COMMIT="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}${tck_str}-MySD-COMMITscaled-filtered-"
         connectome_str_MySD="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}${tck_str}-MySD-filtered-"
         lut="${util_lut}/lut_${parc_name}_mics.csv"
+        if [[ $parc_name =~ gpip_200 ]];then
+            lut="${util_lut}/lut_schaefer-200_mics.csv"
+        elif [[ $parc_name =~ gpip_400 ]];then
+            lut="${util_lut}/lut_schaefer-400_mics.csv"
+        fi
         dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
         dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
         dwi_all="${tmp}/${idBIDS}_${parc_name}-full_dwi.nii.gz"
@@ -698,6 +761,11 @@ if [[ ${tractometry}  == "TRUE" ]]; then
             parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
             connectome_str="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}${connectome_str_tractometry}-filtered-"
             lut="${util_lut}/lut_${parc_name}_mics.csv"
+            if [[ $parc_name =~ gpip_200 ]];then
+                lut="${util_lut}/lut_schaefer-200_mics.csv"
+            elif [[ $parc_name =~ gpip_400 ]];then
+                lut="${util_lut}/lut_schaefer-400_mics.csv"
+            fi
             dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
             dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
             dwi_all="${tmp}/${idBIDS}_${parc_name}-full_dwi.nii.gz"
@@ -724,6 +792,52 @@ fi
 
 
 if [[ ${tck_imaging}  == "TRUE"  ]]; then
+
+<<comm
+parcellations=($(find "${dir_volum}" -name "*.nii.gz" ! -name "*cerebellum*" ! -name "*subcortical*"))
+dwi_cere="${proc_dwi}/${idBIDS}_space-dwi_atlas-cerebellum.nii.gz"
+dwi_subc="${proc_dwi}/${idBIDS}_space-dwi_atlas-subcortical.nii.gz"
+lut_sc="${util_lut}/lut_subcortical-cerebellum_mics.csv"
+
+
+COMMIT_volume=${proc_dwi}/${idBIDS}_space-dwi_desc-iFOD2-3M_tractography_COMMIT-filtered_volume.txt
+
+rm ${dwi_cnntm}/*IAV*
+
+for seg in "${parcellations[@]}"; do
+    parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
+    connectome_str_thing="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}_desc-iFOD2-3M-COMMIT"
+    lut="${util_lut}/lut_${parc_name}_mics.csv"
+
+    dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
+    dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
+    dwi_all="${tmp}/${idBIDS}_${parc_name}-full_dwi.nii.gz"
+    # -----------------------------------------------------------------------------------------------
+    # Build the Full connectome (Cortical-Subcortical-Cerebellar)
+    if [[ ! -f "$dwi_all" ]]; then ((N++))
+        Info "Building $parc_name cortical-subcortical-cerebellum connectome"
+        # Take parcellation into DWI space
+        Do_cmd antsApplyTransforms -d 3 -e 3 -i "$seg" -r "${dwi_b0}" -n GenericLabel "$trans_T12dwi" -o "$dwi_cortex" -v -u int
+        # Remove the medial wall
+        for i in 1000 2000; do Do_cmd fslmaths "$dwi_cortex" -thr "$i" -uthr "$i" -binv -mul "$dwi_cortex" "$dwi_cortex"; done
+        Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_subc" -add "$dwi_cortex" "$dwi_cortexSub" -odt int # added the subcortical parcellation
+        Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int # added the cerebellar parcellation
+    fi
+    if [[ ! -f "${connectome_str_thing}_IAV_full-connectome" ]]; then
+        Info "Generating IAV"
+        option2="-tck_weights_in $COMMIT_volume"
+        build_connectomes "$init_tck" "$dwi_all" "${connectome_str_thing}_IAV_full" "$option2"
+    fi
+done
+
+
+
+
+
+
+
+
+
 
     mkdir ${proc_dwi}/roi_image
 
@@ -755,17 +869,97 @@ if [[ ${tck_imaging}  == "TRUE"  ]]; then
     t1_fs_str="${tmp}/${idBIDS}_fs_to-nativepro_mode-image_desc_"
     t1_fs_affine="${t1_fs_str}0GenericAffine.mat"
     Do_cmd antsRegistrationSyN.sh -d 3 -f "$T1nativepro_brain" -m "$tmp/T1_brain_FS.nii.gz" -o "$t1_fs_str" -t a -n "$threads" -p d
-    Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o $tmp/${idBIDS}_DK-85-full_dwi.nii.gz -v 
+    Do_cmd antsApplyTransforms -d 3 -r $dwi_b0 -i $tmp/nodes_fixSGM.nii.gz -n GenericLabel -t "$dwi_SyN_warp" -t "$dwi_SyN_affine" -t "$t1_fs_affine" -o ${proc_dwi}/roi_image/${idBIDS}_DK-85-full_dwi.nii.gz -v 
 
-    Do_cmd tck2connectome $COMMIT_AV_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/AVF.txt -tck_weights_in $COMMIT_AV_weighttimeslength -symmetric -force
-    Do_cmd tck2connectome $MySD_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/MVF.txt -tck_weights_in $MySD_weighttimeslength -symmetric -force
-    Do_cmd tck2connectome $COMMIT_AV_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz  ${proc_dwi}/roi_image/tracto.txt -scale_file $weights_gratio -stat_edge mean -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/tract_assignments.txt
+#    Do_cmd tck2connectome $COMMIT_AV_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/AVF.txt -tck_weights_in $COMMIT_AV_weighttimeslength -symmetric -force
+#    Do_cmd tck2connectome $COMMIT_AV_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/ACS.txt -tck_weights_in $COMMIT_AV_weights -symmetric -force
+#    Do_cmd tck2connectome $MySD_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/MVF.txt -tck_weights_in $MySD_weighttimeslength -symmetric -force
+#    Do_cmd tck2connectome $MySD_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/MCS.txt -tck_weights_in $MySD_weights -symmetric -force
 
-    matlab -nodisplay -r "MVF = dlmread('${proc_dwi}/roi_image/MVF.txt'); AVF = dlmread('${proc_dwi}/roi_image/AVF.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${proc_dwi}/roi_image/gratio.txt', 'gratio', '-ASCII'); exit"
 
-    Do_cmd connectome2tck $COMMIT_AV_tck ${proc_dwi}/roi_image/tract_assignments.txt ${proc_dwi}/roi_image/filt.tck -files single -nodes 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85 -exclusive
+#    Do_cmd tck2connectome $COMMIT_AV_tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz  ${proc_dwi}/roi_image/tracto.txt -scale_file $weights_gratio -stat_edge mean -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/tract_assignments.txt
 
-    Do_cmd tck2connectome ${proc_dwi}/roi_image/filt.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/nos.txt -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/filt_tract_assignments.txt  
+#    matlab -nodisplay -r "MVF = dlmread('${proc_dwi}/roi_image/MVF.txt'); AVF = dlmread('${proc_dwi}/roi_image/AVF.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${proc_dwi}/roi_image/gratio.txt', 'gratio', '-ASCII'); exit"
+
+#    Do_cmd connectome2tck $COMMIT_AV_tck ${proc_dwi}/roi_image/tract_assignments.txt ${proc_dwi}/roi_image/filt.tck -files single -nodes 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85 -exclusive
+
+#    Do_cmd tck2connectome ${proc_dwi}/roi_image/filt.tck $tmp/${idBIDS}_DK-85-full_dwi.nii.gz ${proc_dwi}/roi_image/nos.txt -symmetric -quiet -out_assignments ${proc_dwi}/roi_image/filt_tract_assignments.txt  
+comm
+
+
+
+
+
+MySD_tck="${proc_dwi}/${idBIDS}_${init_tck_str}-MySD-filtered.tck"
+MySD_NODDI_tck="${proc_dwi}/${idBIDS}_${init_tck_str}-MySDNODDI-filtered.tck"
+MySD_NODDI_length="${proc_dwi}/${idBIDS}_${init_tck_str}-MySDNODDI-filtered_length.txt"
+MySD_NODDI_weights="${proc_dwi}/${idBIDS}_${init_tck_str}-MySDNODDI-filtered_weights.txt"
+MySD_NODDI_weighttimeslength="$proc_dwi/${idBIDS}_${init_tck_str}-MySDNODDI-filtered_volume.txt"
+
+    Do_cmd mrcalc 1 $MVF_in_dwi -subtract 1 $proc_dwi/NODDI_AMICO/AMICO/NODDI/fit_FWF_up.nii.gz -subtract -multiply $proc_dwi/NODDI_AMICO/AMICO/NODDI/fit_NDI_up.nii.gz -multiply $proc_dwi/AVF_NODDI.nii.gz
+
+#fslmaths 1 -sub $MVF_in_dwi $tmp/gratio1.nii.gz
+#fslmaths 1 -sub $proc_dwi/NODDI_AMICO/AMICO/NODDI/fit_FWF_up.nii.gz $tmp/gratio2.nii.gz
+#fslmaths $tmp/gratio1.nii.gz -mul $tmp/gratio2.nii.gz -mul $proc_dwi/NODDI_AMICO/AMICO/NODDI/fit_NDI_up.nii.gz $proc_dwi/AVF_NODDI.nii.gz
+
+    MySD=${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT/MySD.py
+    weights_MySDNODDI=${proc_dwi}/MySD_NODDI/Results_VolumeFractions/streamline_weights.txt
+    f_5tt=${proc_dwi}/${idBIDS}_space-dwi_desc-5tt.nii.gz
+    wm_mask=${tmp}/${idBIDS}_dwi_wm_mask.nii.gz
+
+ 	Do_cmd mrconvert -coord 3 2 -axes 0,1,2 $f_5tt $wm_mask
+    /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $MySD $idBIDS $proc_dwi $tmp $proc_dwi/MySD_NODDI $MySD_tck $proc_dwi/AVF_NODDI.nii.gz
+  	Do_cmd tckedit -minweight 0.000000000001 -tck_weights_in $weights_MySDNODDI -tck_weights_out $MySD_NODDI_weights $MySD_tck $MySD_NODDI_tck -force
+    Do_cmd tckstats $MySD_NODDI_tck -dump $MySD_NODDI_length -force
+
+    matlab -nodisplay -r "cd('${proc_dwi}'); addpath(genpath('${MICAPIPE}/tardiflab/scripts/01_processing/COMMIT')); MySD_weighttimeslength = weight_times_length('$MySD_NODDI_weights','$MySD_NODDI_length'); save('$MySD_NODDI_weighttimeslength', 'MySD_weighttimeslength', '-ASCII'); exit"
+
+    rm -r ${proc_dwi}/MySD_NODDI/dict*
+
+
+    for seg in "${parcellations[@]}"; do
+        parc_name=$(echo "${seg/.nii.gz/}" | awk -F 'atlas-' '{print $2}')
+        connectome_str_MySD="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}${tck_str}-MySD-filtered-"
+        connectome_str_MySDNODDI="${dwi_cnntm}/${idBIDS}_space-dwi_atlas-${parc_name}${tck_str}-MySDNODDI-filtered-"
+        lut="${util_lut}/lut_${parc_name}_mics.csv"
+
+        dwi_cortex="${tmp}/${idBIDS}_${parc_name}-cor_dwi.nii.gz" # Segmentation in dwi space
+        dwi_cortexSub="${tmp}/${idBIDS}_${parc_name}-sub_dwi.nii.gz"
+        dwi_all="${tmp}/${idBIDS}_${parc_name}-full_dwi.nii.gz"
+        # -----------------------------------------------------------------------------------------------
+        # Build the Full connectome (Cortical-Subcortical-Cerebellar)
+        if [[ ! -f "$dwi_all" ]]; then ((N++))
+            Info "Building $parc_name cortical-subcortical-cerebellum connectome"
+            # Take parcellation into DWI space
+            Do_cmd antsApplyTransforms -d 3 -e 3 -i "$seg" -r "${dwi_b0}" -n GenericLabel "$trans_T12dwi" -o "$dwi_cortex" -v -u int
+            # Remove the medial wall
+            for i in 1000 2000; do Do_cmd fslmaths "$dwi_cortex" -thr "$i" -uthr "$i" -binv -mul "$dwi_cortex" "$dwi_cortex"; done
+            Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_subc" -add "$dwi_cortex" "$dwi_cortexSub" -odt int # added the subcortical parcellation
+            Do_cmd fslmaths "$dwi_cortex" -binv -mul "$dwi_cere" -add "$dwi_cortexSub" "$dwi_all" -odt int # added the cerebellar parcellation
+        fi
+
+        rm ${connectome_str_MySDNODDI}gratio_full-connectome.txt
+        if [[ ! -f "${connectome_str_MySDNODDI}gratio_full-connectome.txt" ]]; then
+            Info "Generating $parc_name MySD connectome"
+            option1="-tck_weights_in $MySD_NODDI_weights"
+            option2="-tck_weights_in $MySD_NODDI_weighttimeslength"
+            option3="-tck_weights_in $MySD_NODDI_weights -scale_invnodevol"
+            option4="-tck_weights_in $MySD_NODDI_weighttimeslength -scale_invnodevol"
+            build_connectomes "$MySD_NODDI_tck" "$dwi_all" "${connectome_str_MySDNODDI}axonal-cross-sectional-area_full" "$option1"
+            build_connectomes "$MySD_NODDI_tck" "$dwi_all" "${connectome_str_MySDNODDI}axonal-volume_full" "$option2"
+            build_connectomes "$MySD_NODDI_tck" "$dwi_all" "${connectome_str_MySDNODDI}axonal-cross-sectional-area-node-norm_full" "$option3"
+            build_connectomes "$MySD_NODDI_tck" "$dwi_all" "${connectome_str_MySDNODDI}axonal-volume-node-norm_full" "$option4"
+
+    		matlab -nodisplay -r "MVF = dlmread('${connectome_str_MySD}myelin-volume_full-connectome.txt'); AVF = dlmread('${connectome_str_MySDNODDI}axonal-volume_full-connectome.txt'); gratio = sqrt(1-MVF./(MVF+AVF)); gratio(isnan(gratio)) = 0; save('${connectome_str_MySDNODDI}gratio_full-connectome.txt', 'gratio', '-ASCII'); exit"
+            
+        fi
+    done
+
+
+
+
+
+
 
 fi
 

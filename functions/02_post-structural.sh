@@ -23,7 +23,7 @@ nocleanup=$5
 threads=$6
 tmpDir=$7
 atlas=$8
-gpip=${9}
+other_parcels=${9}
 PROC=${10}
 export OMP_NUM_THREADS=$threads
 here=$(pwd)
@@ -40,25 +40,6 @@ source $MICAPIPE/functions/utilities.sh
 
 # Assigns variables names
 bids_variables "$BIDS" "$id" "$out" "$SES"
-#------------------------------------------------------------------------------#
-# If using subject-specific rsFC parcellations (i.e. GPIPs), use a personal atlas directory and copy in GPIPs
-if [[ "$gpip" == "gpip" ]]; then
-    # Copy over subject's freesurfer data from LBC server if it is not already in my directory
-    if [[ ! -e /data_/tardiflab/danielos/PAD_input/derivatives/freesurfer/${idBIDS} ]]; then
-        cp -r /lbc/lbc1/PREVENT_AD/derivatives/freesurfer/${idBIDS} /data_/tardiflab/danielos/PAD_input/derivatives/freesurfer
-    fi
-
-    # Redefine parcelations directory as personal atlas directory 
-    util_parcelations=/data_/tardiflab/danielos/PAD_input/parcellations
-    cp /data_/tardiflab/danielos/PAD_input/gpip2native/${subject}_native/${SES}/* ${util_parcelations}
-
-    # Rename GPIPs in accordance with system used for other atlases (i.e. add '_mics' before .annot extension)
-    for file in ${util_parcelations}/*${subject}*;do
-        base_name=${file%.annot}
-        new_name="${base_name}_${SES}_mics.annot"
-        mv "$file" "${new_name}"
-    done
-fi
 
 #------------------------------------------------------------------------------#
 # Manage manual inputs: Parcellations
@@ -172,40 +153,52 @@ fi
 #------------------------------------------------------------------------------#
 # Create parcellation on nativepro space
 Info "fsaverage5 annnot parcellations to T1-nativepro Volume"
-cd "$util_parcelations"
-for parc in "${atlas_parc[@]}"; do
-    parc_annot="${parc/lh./}"
-    parc_str=$(echo "${parc_annot}" | awk -F '_mics' '{print $1}')
-    if [[ ! -f "${dir_volum}/${T1str_nat}-${parc_str}.nii.gz" ]]; then
-        for hemi in lh rh; do
-        Info "Running surface $hemi $parc_annot to $subject"
-        Do_cmd mri_surf2surf --hemi "$hemi" \
+
+# Define list of all parcellation directories to be called
+parcel_directories=($util_parcelations)
+if [[ "$other_parcels" == "gpip" ]] && [[ -n "$(ls -A ${BIDS}/gpip2native/${subject}_native/${SES})" ]]; then
+    parcel_directories+=(/data_/tardiflab/danielos/PAD_input/gpip2native/${subject}_native/${SES})
+fi
+
+for directory in ${parcel_directories[@]}; do
+    cd $directory
+    if [[ "$directory" != "$util_parcelations" ]]; then
+        # Redefine atlas_parc for any new parcellation directory that is not util_parcelations
+        atlas_parc=($(ls lh.*annot))
+    fi
+    for parc in "${atlas_parc[@]}"; do
+        parc_annot="${parc/lh./}"
+        parc_str=$(echo "${parc_annot}" | awk -F '_mics' '{print $1}')
+        if [[ ! -f "${dir_volum}/${T1str_nat}-${parc_str}.nii.gz" ]]; then
+            for hemi in lh rh; do
+            Info "Running surface $hemi $parc_annot to $subject"
+            Do_cmd mri_surf2surf --hemi "$hemi" \
                		  --srcsubject fsaverage5 \
                		  --trgsubject "$idBIDS" \
                		  --sval-annot "${hemi}.${parc_annot}" \
                		  --tval "${dir_freesurfer}/label/${hemi}.${parc_annot}"
-        done
-        fs_mgz="${tmp}/${parc_str}.mgz"
-        fs_tmp="${tmp}/${parc_str}_in_T1.mgz"
-        fs_nii="${tmp}/${T1str_fs}_${parc_str}.nii.gz"                   # labels in fsnative tmp dir
-        labels_nativepro="${dir_volum}/${T1str_nat}-${parc_str}.nii.gz"  # labels in nativepro
+            done
+            fs_mgz="${tmp}/${parc_str}.mgz"
+            fs_tmp="${tmp}/${parc_str}_in_T1.mgz"
+            fs_nii="${tmp}/${T1str_fs}_${parc_str}.nii.gz"                   # labels in fsnative tmp dir
+            labels_nativepro="${dir_volum}/${T1str_nat}-${parc_str}.nii.gz"  # labels in nativepro
 
-        # Register the annot surface parcelation to the T1-freesurfer volume
-        Do_cmd mri_aparc2aseg --s "$idBIDS" --o "$fs_mgz" --annot "${parc_annot/.annot/}" --new-ribbon
-        Do_cmd mri_label2vol --seg "$fs_mgz" --temp "$T1freesurfr" --o "$fs_tmp" --regheader "${dir_freesurfer}/mri/aseg.mgz"
-        Do_cmd mrconvert "$fs_tmp" "$fs_nii" -force      # mgz to nifti_gz
-        Do_cmd fslreorient2std "$fs_nii" "$fs_nii"       # reorient to standard
-        Do_cmd fslmaths "$fs_nii" -thr 1000 "$fs_nii"    # threshold the labels
+            # Register the annot surface parcelation to the T1-freesurfer volume
+            Do_cmd mri_aparc2aseg --s "$idBIDS" --o "$fs_mgz" --annot "${parc_annot/.annot/}" --new-ribbon
+            Do_cmd mri_label2vol --seg "$fs_mgz" --temp "$T1freesurfr" --o "$fs_tmp" --regheader "${dir_freesurfer}/mri/aseg.mgz"
+            Do_cmd mrconvert "$fs_tmp" "$fs_nii" -force      # mgz to nifti_gz
+            Do_cmd fslreorient2std "$fs_nii" "$fs_nii"       # reorient to standard
+            Do_cmd fslmaths "$fs_nii" -thr 1000 "$fs_nii"    # threshold the labels
 
-        # Register parcellation to nativepro
-        Do_cmd antsApplyTransforms -d 3 -i "$fs_nii" -r "$T1nativepro" -n GenericLabel -t "$T1_fsnative_affine" -o "$labels_nativepro" -v -u int
-        if [[ -f "$labels_nativepro" ]]; then ((Nfiles++)); fi
-    else
-        Info "Subject ${id} has a ${parc_str} segmentation on T1-nativepro space"
-        ((Nfiles++))
-    fi
+            # Register parcellation to nativepro
+            Do_cmd antsApplyTransforms -d 3 -i "$fs_nii" -r "$T1nativepro" -n GenericLabel -t "$T1_fsnative_affine" -o "$labels_nativepro" -v -u int
+            if [[ -f "$labels_nativepro" ]]; then ((Nfiles++)); fi
+        else
+            Info "Subject ${id} has a ${parc_str} segmentation on T1-nativepro space"
+            ((Nfiles++))
+        fi
+    done
 done
-
 #------------------------------------------------------------------------------#
 # Compute warp of native structural to Freesurfer and apply to 5TT and first
 if [[ ! -f "${dir_conte69}/${idBIDS}_space-conte69-32k_desc-rh_midthickness.surf.gii" ]]; then
@@ -238,11 +231,6 @@ else
 fi
 
 # -----------------------------------------------------------------------------------------------
-# If GPIP flag was specified, remove parcels from personal atlas directory now that processing is complete
-if [[ "$gpip" == "gpip" ]]; then
-    rm ${util_parcelations}/*${subject}*${SES}*
-fi
-
 # QC notification of completition
 lopuu=$(date +%s)
 eri=$(echo "$lopuu - $aloita" | bc)

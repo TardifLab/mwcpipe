@@ -22,7 +22,7 @@
   export FREESURFER_HOME=${softwareDir}/freesurfer_v7 && source $FREESURFER_HOME/FreeSurferEnv.sh
   export FIXPATH=${softwareDir}/fix								# make sure fix knows where to find mcr (see fix/settings.sh, set FSL_FIX_MCRROOT variable)
 # export PYTHONPATH=${softwareDir}/anaconda3/bin
-  export MATLABPATH=${softwareDir}/matlab
+  export MATLABPATH=${softwareDir}/matlabLIBS                   #Originally was ${softwareDir}/matlab
   export RPATH=${softwareDir}/R 								# v3.6 is necessary for micapipe
 #  export RPATH=${softwareDir}/R-3.6.3/bin 							# this no longer exists
 #  export RPATH=/usr/bin/R 									# This is v4, which is not compatible with the packages necessary for micapipe
@@ -55,7 +55,6 @@
   export OUT_DIR="${RAW_DIR}/derivatives"   	                          		# Where you want derivatives saved
   export MICAPIPE="${mwcdir}/mwcpipe" 					                		# Where you put all tools incl micapipe
   export scripts="${MICAPIPE}/tardiflab/scripts/01_processing"                  # Location of custom tools that interface with micapipe
-  export MVFlist="/data_/tardiflab/wenda/mwc/dummylist"                                                              # Location of subjects that would be used to calibrate g-ratio calculations
 # Virtual environments
   export pyvenv_commit=${softwareDir}/COMMIT_MTR_env 					# Location of virtual environment with dependencies for COMMIT & AMICO
   export pyvenv_micapipe=micapipe_mwc_env                                		# micapipe python venv (conda activate $pyvenv_micapipe)

@@ -67,7 +67,7 @@ Do_cmd mkdir -p "$tmp"
 trap 'cleanup $tmp $nocleanup $here' SIGINT SIGTERM
 
 #------------------------------------------------------------------------------#
-# Registering MTsat to DWI space. MTsat_in_dwi and it's transform will be used
+# Registering MTsat to DWI space. MTsat_in_dwi and its transform will be used
 # in 04_proc-COMMIT.sh
 
 MTsat_in_dwi="${proc_dwi}/${idBIDS}_space-dwi_desc-SyN_MTsat.nii.gz"
@@ -138,6 +138,7 @@ if [[ "$gratiotractometry" == "TRUE" ]]; then
 
         /data_/tardiflab/wenda/programs/localpython/bin/python3.10 $AMICO_py $idBIDS $proc_dwi $tmp
 
+        Info "[WARNING!] Upsampling NODDI maps using cubic interpolation by default. If upsampled maps have values <0 or >1, re-run with linear interpolation."
         voxel=($(mrinfo $MTsat_in_dwi -spacing))
         Do_cmd mrgrid $NODDI_dir/AMICO/NODDI/fit_NDI.nii.gz regrid -voxel $voxel $NODDI_dir/AMICO/NODDI/fit_NDI_up.nii.gz
         Do_cmd mrgrid $NODDI_dir/AMICO/NODDI/fit_FWF.nii.gz regrid -voxel $voxel $NODDI_dir/AMICO/NODDI/fit_FWF_up.nii.gz

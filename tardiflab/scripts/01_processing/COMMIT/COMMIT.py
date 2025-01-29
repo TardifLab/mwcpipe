@@ -79,7 +79,7 @@ mit.load_kernels()
 mit.load_dictionary( dict_dir )
 
 # Build linear operator A
-mit.set_threads()                                                                       # use max possible; mit.set_threads( n ) to set manually
+mit.set_threads( 30 )                                                                       # use max possible; mit.set_threads( n ) to set manually
 mit.build_operator()
 # perform optimization
 mit.fit(tol_fun=1e-3, max_iter=1000)

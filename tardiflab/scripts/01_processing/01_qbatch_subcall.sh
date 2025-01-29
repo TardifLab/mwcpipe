@@ -38,47 +38,64 @@ logdir="${rootdir}/mwcpipe/tardiflab/output/logs"
 # directory to store log files
   log_func_dir="${logdir}/$Fn_$FUNC_ID"
 
-<<comm
+# Mark Nelson
+#  for SUB in {01..30}; do
+  for SUB in 18 {20..27} 29; do
+	NSES="2"
+        ID="sub-${SUB}"
+	SES="ses-${NSES}"
+        sub_dir="${log_func_dir}/${ID}_${SES}"
+        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
+        cd ${sub_dir}                                                                                           # cd or logs will output in cwd
+
+        # Call to desired function
+#       qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" ${script} $SUB $FUNC_ID "1"                              # Standard call
+        qbatch -q all.q -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "${NSES}"     # option to gauge resource allocation
+  done
+
+
+
+#<<comm
 # Session-1
 #  for SUB in {02..17} 19 28 30; do
-  for SUB in 17 19 28 30 ; do
+#  for SUB in 17 19 28 30 ; do
 
-	ID=sub-"${SUB}"
-	sub_dir="${log_func_dir}/${ID}_ses-1"
-	if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
-	cd ${sub_dir} 												# cd or logs will output in cwd
+#	ID=sub-"${SUB}"
+#	sub_dir="${log_func_dir}/${ID}_ses-1"
+#	if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
+#	cd ${sub_dir} 												# cd or logs will output in cwd
 
 	# Call to desired function
 #	qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" ${script} $SUB $FUNC_ID "1" 				# Standard call
-	qbatch -q all.q -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"	# option to gauge resource allocation
-  done
+#	qbatch -q all.q -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"	# option to gauge resource allocation
+#  done
+#comm
 
-comm
 # Session-1
-  for SUB in 18 {20..27} 29 ; do
+#  for SUB in 18 {20..27} 29 ; do
 
-        ID=sub-"${SUB}"
-        sub_dir="${log_func_dir}/${ID}_ses-1"
-        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
-        cd ${sub_dir}                                                                                           # cd or logs will output in cwd
+#        ID=sub-"${SUB}"
+#        sub_dir="${log_func_dir}/${ID}_ses-1"
+#        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
+#        cd ${sub_dir}                                                                                           # cd or logs will output in cwd
 
         # Call to desired function
-        qbatch -q tardif.q -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" ${script} $SUB $FUNC_ID "1"                            # Standard call
+#        qbatch -q tardif.q -verbose -l h_vmem=${VM}G -N "s${SUB}_1_f${Fn}" ${script} $SUB $FUNC_ID "1"                            # Standard call
 #       qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "1"    # option to gauge resource allocation
-  done
+#  done
 
 
 # Session-2
-  for SUB in 18 {20..27} 29 ; do
+#  for SUB in 18 {20..27} 29 ; do
 
-        ID=sub-"${SUB}"
-        sub_dir="${log_func_dir}/${ID}_ses-2"
-        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
-        cd ${sub_dir}                                                                                           # cd or logs will output in cwd
+#        ID=sub-"${SUB}"
+#        sub_dir="${log_func_dir}/${ID}_ses-2"
+#        if [ ! -d ${sub_dir} ]; then mkdir -p ${sub_dir} ;  fi
+#        cd ${sub_dir}                                                                                           # cd or logs will output in cwd
 
         # Call to desired function
-        qbatch -q tardif.q -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" ${script} $SUB $FUNC_ID "2"                            # Standard call
+#        qbatch -q tardif.q -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" ${script} $SUB $FUNC_ID "2"                            # Standard call
 #       qbatch -verbose -l h_vmem=${VM}G -N "s${SUB}_2_f${Fn}" /usr/bin/time --verbose ${script} $SUB $FUNC_ID "2"    # option to gauge resource allocation
 
-  done
+#  done
 

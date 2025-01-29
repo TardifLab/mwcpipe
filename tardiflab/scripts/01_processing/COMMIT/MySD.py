@@ -54,7 +54,7 @@ mit.load_kernels()
 # Load dictionary and buid the operator
 mit.load_dictionary( dict_dir )
 
-mit.set_threads()
+mit.set_threads(30)
 mit.build_operator()
 
 # fitting
