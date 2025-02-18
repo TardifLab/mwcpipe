@@ -4,6 +4,23 @@
 #
 # NOTE: specifically targeting problematic subjects: 08 11 13 18 18r 19 20 21r 26 27
 #
+# RESULTS FROM EACH STAGE:
+#
+#	1. MI-AffineOnly			: Large shrinkage of cortical surface
+#       2. CC-AffineOnly			: Better registration of cortical surface!
+#       3. MI-AffineSyN				: Large shrinkage of cortical surface
+#       4. CC-AffineSyN				: Better registration of cortical surface! CC > MI for T1w-func
+#       5. CC-RigidAffineSyN			: Best results! CC performs well for all stages
+#       6. CC-RigidAffineSyN-lowerRegularize	: Lowering the lambda does not improve registration
+#       7. CC-RigidAffineSyN-fasterAllLevels	: Very poor reg! Actually took 50% longer! Rigid stage took nearly 10x longer, and Affine took 50% longer.
+#       8. CC-RigidAffineSyN-FasterAffineSyN	: Good result, but not as good as 5; Affine took 50% longer, SyN was 25% faster.
+#       9. CC-RigidAffineSyN-LongerSyN    	: 
+#
+# Additional Notes:
+#
+# 	1. Switched back to bspline interp (from linear) at stage 5. Seems to provide best results when SyN stage included.
+#
+#
 # # INPUTS:
 #       $1 : id  = num in (01..30)
 # 	$2 : SES = num in 1, 2
@@ -361,6 +378,226 @@ if [[ ! -f "$func_SyN_warp" ]]; then
         --convergence ["$SYNCONVERG","$SYNTOL",10] \
         --shrink-factors "$SYNSHRINK" \
         --smoothing-sigmas "$SYNSMOOTH" \
+        --initial-moving-transform "$translation" \
+        --verbose 1 > "$log_syn"
+
+else echo "---- SyN warp already computed at: ${func_SyN_warp}"; fi
+
+if [[ ! -f "$fmri_in_T1nativepro" ]] || [[ ! -f "$T1nativepro_in_func" ]]; then
+        antsApplyTransforms -d 3 -i "$moving" -r "$fixed1" -n BSpline -t "$func_SyN_warp" -t "$func_SyN_affine" -o "$fmri_in_T1nativepro" -v --float
+        antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$moving" -n BSpline -t ["$func_SyN_affine",1] -t "$func_SyN_Invwarp" -o "$T1nativepro_in_func" -v --float
+else echo "---- T1w-FUNC SyN reg already completed for ${idBIDS} in directory ${meth} "; fi
+
+
+# ------------------------ ANTs TESTING 7 ---------------------------- #
+
+# ANTs parameters for this section
+  tRIGIDCONVERG="500x250x150x0"
+  tRIGIDSHRINK="4x2x1x1"
+  tRIGIDSMOOTH="2x1x0x0vox"
+
+  tAFFINECONVERG="250x150x100x50"
+  tAFFINESHRINK="2x1x1x1"
+  tAFFINESMOOTH="1x0x0x0vox"
+
+  tSYNCONVERG="70x50x40x20"
+  tSYNSHRINK="2x1x1x1"
+  tSYNSMOOTH="1x0x0x0vox"
+
+# ANTs specific outputs
+  meth="reg_7_SyN_CC_faster"
+  testdir_xfm=${testdir}/${meth}/xfms
+  testdir_anat=${testdir}/${meth}/anat
+  testdir_func=${testdir}/${meth}/func
+  testdir_tmp=${testdir}/${meth}/tmp
+
+  if [[ ! -d ${testdir_xfm} ]]  ; then mkdir -p ${testdir_xfm}  ; fi
+  if [[ ! -d ${testdir_anat} ]] ; then mkdir -p ${testdir_anat} ; fi
+  if [[ ! -d ${testdir_func} ]] ; then mkdir -p ${testdir_func} ; fi
+  if [[ ! -d ${testdir_tmp} ]]  ; then mkdir -p ${testdir_tmp}  ; fi
+
+#--------- Compute FUNC --> T1w transform
+# Settings
+  moving="$func_brain"
+  fixed1="$t1bold"                                                                                                                              # Brain
+  translation="[$fixed1,$moving,0]"                                                                                                             #0=geometric center; 1=center of mass; 2=origin
+  w8_fixed1="1"                                                                                                                                 # weights for cost function
+  sample_fixed1="0.25"                                                                                                                          # Proportion of points to sample
+  SyN_regularize="0.1"                                                                                                                         # decreases smoothing, higher risk of overfitting
+
+# Affine only
+  func_SyN_str="${testdir_xfm}/${idBIDS}_space-nativepro_from-func_to-t1w_mode-image_desc-SyN_"
+  func_SyN_warp="${func_SyN_str}1Warp.nii.gz"
+  func_SyN_Invwarp="${func_SyN_str}1InverseWarp.nii.gz"
+  func_SyN_affine="${func_SyN_str}0GenericAffine.mat"
+  fmri_in_T1nativepro="${testdir_anat}/${idBIDS}_space-nativepro_desc-${tagMRI}_mean.nii.gz"
+  T1nativepro_in_func="${testdir_func}/${idBIDS}_space-func_desc-t1w.nii.gz"
+
+  log_syn="${testdir_xfm}/${idBIDS}_log_syn.txt"
+
+if [[ ! -f "$func_SyN_warp" ]]; then
+    antsRegistration --dimensionality 3 \
+        --float 0 \
+        --output "$func_SyN_str" \
+        --interpolation BSpline[3] \
+        --transform Rigid[0.1] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$tRIGIDCONVERG","$RIGIDTOL",10] \
+        --shrink-factors "$tRIGIDSHRINK" \
+        --smoothing-sigmas "$tRIGIDSMOOTH" \
+        --transform Affine[0.1] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$tAFFINECONVERG","$AFFINETOL",10] \
+        --shrink-factors "$tAFFINESHRINK" \
+        --smoothing-sigmas "$tAFFINESMOOTH" \
+        --transform SyN["$SyN_regularize",3,0] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$tSYNCONVERG","$SYNTOL",10] \
+        --shrink-factors "$tSYNSHRINK" \
+        --smoothing-sigmas "$tSYNSMOOTH" \
+        --initial-moving-transform "$translation" \
+        --verbose 1 > "$log_syn"
+
+else echo "---- SyN warp already computed at: ${func_SyN_warp}"; fi
+
+if [[ ! -f "$fmri_in_T1nativepro" ]] || [[ ! -f "$T1nativepro_in_func" ]]; then
+        antsApplyTransforms -d 3 -i "$moving" -r "$fixed1" -n BSpline -t "$func_SyN_warp" -t "$func_SyN_affine" -o "$fmri_in_T1nativepro" -v --float
+        antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$moving" -n BSpline -t ["$func_SyN_affine",1] -t "$func_SyN_Invwarp" -o "$T1nativepro_in_func" -v --float
+else echo "---- T1w-FUNC SyN reg already completed for ${idBIDS} in directory ${meth} "; fi
+
+
+
+# ------------------------ ANTs TESTING 8 ---------------------------- #
+
+# ANTs parameters for this section
+  tAFFINECONVERG="250x150x100x50"
+  tAFFINESHRINK="2x1x1x1"
+  tAFFINESMOOTH="1x0x0x0vox"
+
+  tSYNCONVERG="70x50x40x20"
+  tSYNSHRINK="2x1x1x1"
+  tSYNSMOOTH="1x0x0x0vox"
+
+# ANTs specific outputs
+  meth="reg_8_SyN_CC_faster2"
+  testdir_xfm=${testdir}/${meth}/xfms
+  testdir_anat=${testdir}/${meth}/anat
+  testdir_func=${testdir}/${meth}/func
+  testdir_tmp=${testdir}/${meth}/tmp
+
+  if [[ ! -d ${testdir_xfm} ]]  ; then mkdir -p ${testdir_xfm}  ; fi
+  if [[ ! -d ${testdir_anat} ]] ; then mkdir -p ${testdir_anat} ; fi
+  if [[ ! -d ${testdir_func} ]] ; then mkdir -p ${testdir_func} ; fi
+  if [[ ! -d ${testdir_tmp} ]]  ; then mkdir -p ${testdir_tmp}  ; fi
+
+#--------- Compute FUNC --> T1w transform
+# Settings
+  moving="$func_brain"
+  fixed1="$t1bold"                                                                                                                              # Brain
+  translation="[$fixed1,$moving,0]"                                                                                                             #0=geometric center; 1=center of mass; 2=origin
+  w8_fixed1="1"                                                                                                                                 # weights for cost function
+  sample_fixed1="0.25"                                                                                                                          # Proportion of points to sample
+  SyN_regularize="0.1"                                                                                                                         # decreases smoothing, higher risk of overfitting
+
+# Affine only
+  func_SyN_str="${testdir_xfm}/${idBIDS}_space-nativepro_from-func_to-t1w_mode-image_desc-SyN_"
+  func_SyN_warp="${func_SyN_str}1Warp.nii.gz"
+  func_SyN_Invwarp="${func_SyN_str}1InverseWarp.nii.gz"
+  func_SyN_affine="${func_SyN_str}0GenericAffine.mat"
+  fmri_in_T1nativepro="${testdir_anat}/${idBIDS}_space-nativepro_desc-${tagMRI}_mean.nii.gz"
+  T1nativepro_in_func="${testdir_func}/${idBIDS}_space-func_desc-t1w.nii.gz"
+
+  log_syn="${testdir_xfm}/${idBIDS}_log_syn.txt"
+
+if [[ ! -f "$func_SyN_warp" ]]; then
+    antsRegistration --dimensionality 3 \
+        --float 0 \
+        --output "$func_SyN_str" \
+        --interpolation BSpline[3] \
+        --transform Rigid[0.1] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$RIGIDCONVERG","$RIGIDTOL",10] \
+        --shrink-factors "$RIGIDSHRINK" \
+        --smoothing-sigmas "$RIGIDSMOOTH" \
+        --transform Affine[0.1] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$tAFFINECONVERG","$AFFINETOL",10] \
+        --shrink-factors "$tAFFINESHRINK" \
+        --smoothing-sigmas "$tAFFINESMOOTH" \
+        --transform SyN["$SyN_regularize",3,0] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$tSYNCONVERG","$SYNTOL",10] \
+        --shrink-factors "$tSYNSHRINK" \
+        --smoothing-sigmas "$tSYNSMOOTH" \
+        --initial-moving-transform "$translation" \
+        --verbose 1 > "$log_syn"
+
+else echo "---- SyN warp already computed at: ${func_SyN_warp}"; fi
+
+if [[ ! -f "$fmri_in_T1nativepro" ]] || [[ ! -f "$T1nativepro_in_func" ]]; then
+        antsApplyTransforms -d 3 -i "$moving" -r "$fixed1" -n BSpline -t "$func_SyN_warp" -t "$func_SyN_affine" -o "$fmri_in_T1nativepro" -v --float
+        antsApplyTransforms -d 3 -i "$T1nativepro_brain" -r "$moving" -n BSpline -t ["$func_SyN_affine",1] -t "$func_SyN_Invwarp" -o "$T1nativepro_in_func" -v --float
+else echo "---- T1w-FUNC SyN reg already completed for ${idBIDS} in directory ${meth} "; fi
+
+
+# ------------------------ ANTs TESTING 9 ---------------------------- #
+
+# ANTs parameters for this section
+  tSYNCONVERG="150x100x70x50"
+  tSYNSHRINK="2x1x1x1"
+  tSYNSMOOTH="1x0x0x0vox"
+
+# ANTs specific outputs
+  meth="reg_9_SyN_CC_longerSyN"
+  testdir_xfm=${testdir}/${meth}/xfms
+  testdir_anat=${testdir}/${meth}/anat
+  testdir_func=${testdir}/${meth}/func
+  testdir_tmp=${testdir}/${meth}/tmp
+
+  if [[ ! -d ${testdir_xfm} ]]  ; then mkdir -p ${testdir_xfm}  ; fi
+  if [[ ! -d ${testdir_anat} ]] ; then mkdir -p ${testdir_anat} ; fi
+  if [[ ! -d ${testdir_func} ]] ; then mkdir -p ${testdir_func} ; fi
+  if [[ ! -d ${testdir_tmp} ]]  ; then mkdir -p ${testdir_tmp}  ; fi
+
+#--------- Compute FUNC --> T1w transform
+# Settings
+  moving="$func_brain"
+  fixed1="$t1bold"                                                                                                                              # Brain
+  translation="[$fixed1,$moving,0]"                                                                                                             #0=geometric center; 1=center of mass; 2=origin
+  w8_fixed1="1"                                                                                                                                 # weights for cost function
+  sample_fixed1="0.25"                                                                                                                          # Proportion of points to sample
+  SyN_regularize="0.1"                                                                                                                         # decreases smoothing, higher risk of overfitting
+
+# Affine only
+  func_SyN_str="${testdir_xfm}/${idBIDS}_space-nativepro_from-func_to-t1w_mode-image_desc-SyN_"
+  func_SyN_warp="${func_SyN_str}1Warp.nii.gz"
+  func_SyN_Invwarp="${func_SyN_str}1InverseWarp.nii.gz"
+  func_SyN_affine="${func_SyN_str}0GenericAffine.mat"
+  fmri_in_T1nativepro="${testdir_anat}/${idBIDS}_space-nativepro_desc-${tagMRI}_mean.nii.gz"
+  T1nativepro_in_func="${testdir_func}/${idBIDS}_space-func_desc-t1w.nii.gz"
+
+  log_syn="${testdir_xfm}/${idBIDS}_log_syn.txt"
+
+if [[ ! -f "$func_SyN_warp" ]]; then
+    antsRegistration --dimensionality 3 \
+        --float 0 \
+        --output "$func_SyN_str" \
+        --interpolation BSpline[3] \
+        --transform Rigid[0.1] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$RIGIDCONVERG","$RIGIDTOL",10] \
+        --shrink-factors "$RIGIDSHRINK" \
+        --smoothing-sigmas "$RIGIDSMOOTH" \
+        --transform Affine[0.1] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$AFFINECONVERG","$AFFINETOL",10] \
+        --shrink-factors "$AFFINESHRINK" \
+        --smoothing-sigmas "$AFFINESMOOTH" \
+        --transform SyN["$SyN_regularize",3,0] \
+        --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+        --convergence ["$tSYNCONVERG","$SYNTOL",10] \
+        --shrink-factors "$tSYNSHRINK" \
+        --smoothing-sigmas "$tSYNSMOOTH" \
         --initial-moving-transform "$translation" \
         --verbose 1 > "$log_syn"
 

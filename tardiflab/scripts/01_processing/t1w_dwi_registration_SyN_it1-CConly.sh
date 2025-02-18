@@ -28,14 +28,11 @@
 
 
   translation="[$fixed1,$moving,1]"
-  w8_fixed1_cc="0.05" 																# weights for cost function
-  w8_fixed2_cc="0.45"
-  w8_fixed1_mi="0.25"                                                                                                                           # weights for cost function
-  w8_fixed2_mi="0.25"
+  w8_fixed1="0.5" 																# weights for cost function
+  w8_fixed2="0.5"
 #  sample_fixed1="0.75"																# Proportion of points to sample
 #  sample_fixed2="0.75"
   CCpr="4"                                                                                                                                      # patchRadius for CC
-  MIhb="25"                                                                                                                                     # histogramBins for MI
 
   RIGIDCONVERG="1000x500x250x100"
   RIGIDSHRINK="8x4x2x1"
@@ -56,26 +53,20 @@
     --output "$dwi_SyN_str" \
     --interpolation BSpline[3] \
     --transform Rigid[0.1] \
-    --metric CC["$fixed1","$moving","$w8_fixed1_cc","$CCpr"] \
-    --metric CC["$fixed2","$moving","$w8_fixed2_cc","$CCpr"] \
-    --metric MI["$fixed1","$moving","$w8_fixed1_mi","$MIhb"] \
-    --metric MI["$fixed2","$moving","$w8_fixed2_mi","$MIhb"] \
+    --metric CC["$fixed1","$moving","$w8_fixed1","$CCpr"] \
+    --metric CC["$fixed2","$moving","$w8_fixed2","$CCpr"] \
     --convergence ["$RIGIDCONVERG",1e-6,10] \
     --shrink-factors "$RIGIDSHRINK" \
     --smoothing-sigmas "$RIGIDSMOOTH" \
     --transform Affine[0.1] \
-    --metric CC["$fixed1","$moving","$w8_fixed1_cc","$CCpr"] \
-    --metric CC["$fixed2","$moving","$w8_fixed2_cc","$CCpr"] \
-    --metric MI["$fixed1","$moving","$w8_fixed1_mi","$MIhb"] \
-    --metric MI["$fixed2","$moving","$w8_fixed2_mi","$MIhb"] \
+    --metric CC["$fixed1","$moving","$w8_fixed1","$CCpr"] \
+    --metric CC["$fixed2","$moving","$w8_fixed2","$CCpr"] \
     --convergence ["$AFFINECONVERG",1e-6,10] \
     --shrink-factors "$AFFINESHRINK" \
     --smoothing-sigmas "$AFFINESMOOTH" \
     --transform SyN[0.1,3,0] \
-    --metric CC["$fixed1","$moving","$w8_fixed1_cc","$CCpr"] \
-    --metric CC["$fixed2","$moving","$w8_fixed2_cc","$CCpr"] \
-    --metric MI["$fixed1","$moving","$w8_fixed1_mi","$MIhb"] \
-    --metric MI["$fixed2","$moving","$w8_fixed2_mi","$MIhb"] \
+    --metric CC["$fixed1","$moving","$w8_fixed1","$CCpr"] \
+    --metric CC["$fixed2","$moving","$w8_fixed2","$CCpr"] \
     --convergence ["$SYNCONVERG",1e-6,10] \
     --shrink-factors "$SYNSHRINK" \
     --smoothing-sigmas "$SYNSMOOTH" \

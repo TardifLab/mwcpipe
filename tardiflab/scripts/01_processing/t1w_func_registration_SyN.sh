@@ -24,11 +24,13 @@
   echo "Log location: $log_syn"
 
 
-  translation="[$fixed1,$moving,0]" 												# 0=geometric center; 1=center of mass; 2=origin
+  translation="[$fixed1,$moving,1]" 												# 0=geometric center; 1=center of mass; 2=origin
   w8_fixed1="1.0" 														# weights for cost function
-  sample_fixed1="0.25" 														# Proportion of points to sample
+#  sample_fixed1="0.25"                                                                                                         # Proportion of points to sample
+  MIhb="32"                                                                                                                     # histogramBins for MI
+  CCpr="4"                                                                                                                      # patchRadius for CC
 
-  RIGIDCONVERG="1000x500x250x0"
+  RIGIDCONVERG="1000x500x250x100"
   RIGIDTOL="1e-6"
   RIGIDSHRINK="8x4x2x1"
   RIGIDSMOOTH="3x2x1x0vox"
@@ -50,21 +52,21 @@
     --float 0 \
     --output "$func_SyN_str" \
     --interpolation BSpline[3] \
+    --use-histogram-matching 1 \
     --transform Rigid[0.1] \
-    --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+    --metric MI["$fixed1","$moving","$w8_fixed1","$MIhb"] \
     --convergence ["$RIGIDCONVERG","$RIGIDTOL",10] \
     --shrink-factors "$RIGIDSHRINK" \
     --smoothing-sigmas "$RIGIDSMOOTH" \
     --transform Affine[0.1] \
-    --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+    --metric CC["$fixed1","$moving","$w8_fixed1","$CCpr"] \
     --convergence ["$AFFINECONVERG","$AFFINETOL",10] \
     --shrink-factors "$AFFINESHRINK" \
     --smoothing-sigmas "$AFFINESMOOTH" \
     --transform SyN["$SYNREGULARIZE",3,0] \
-    --metric CC["$fixed1","$moving","$w8_fixed1",4] \
+    --metric CC["$fixed1","$moving","$w8_fixed1","$CCpr"] \
     --convergence ["$SYNCONVERG","$SYNTOL",10] \
     --shrink-factors "$SYNSHRINK" \
     --smoothing-sigmas "$SYNSMOOTH" \
     --initial-moving-transform "$translation" \
     --verbose 1 > "$log_syn"
-

@@ -295,8 +295,8 @@ if [[ "${tagMRI}" == "_" ]]; then Warning "The provided -mainScanStr did not mat
 Note "tagMRI:" "${tagMRI}"
 
 # End if module has been processed
-module_json="${dir_QC}/${idBIDS}_module-proc_func_${fmri_tag}.json"
-micapipe_check_json_status "${module_json}" "proc_func"
+#module_json="${dir_QC}/${idBIDS}_module-proc_func_${fmri_tag}.json"
+#micapipe_check_json_status "${module_json}" "proc_func"
 
 #------------------------------------------------------------------------------#
 Title "functional MRI processing\n\t\tmicapipe $Version, $PROC "
