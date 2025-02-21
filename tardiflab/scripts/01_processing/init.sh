@@ -29,9 +29,10 @@
   export customBin=${softwareDir}/bin
   export ANACONDA=${softwareDir}/anaconda3
   export MCRPATH=${softwareDir}/mcr 								# Matlab runtime compiler
+  export C3DPATH=${softwareDir}/c3d-1.0.0
 
 # Export new PATH with all the necessary binaries
-  export PATH="${MCRPATH}:${ANACONDA}:${customBin}:${MATLABPATH}:${RPATH}/bin:${AFNIDIR}:${ANTSPATH}:${workbench_path}:${FREESURFER_HOME}/bin:${mrtrixDir}/bin:${mrtrixDir}/lib:${FSLDIR}/bin:${FIXPATH}:${PATH}"
+  export PATH="${C3DPATH}:${MCRPATH}:${ANACONDA}:${customBin}:${MATLABPATH}:${RPATH}/bin:${AFNIDIR}:${ANTSPATH}:${workbench_path}:${FREESURFER_HOME}/bin:${mrtrixDir}/bin:${mrtrixDir}/lib:${FSLDIR}/bin:${FIXPATH}:${PATH}"
 
 # Set the libraries paths for mrtrx and fsl (This use of LD_LIBRARY_PATH may be frowned upon :/)
   export LD_LIBRARY_PATH="${FSLDIR}/lib:${FSLDIR}/bin:${mrtrixDir}/lib:${RPATH}/lib"
